@@ -36,7 +36,7 @@ export const EXPORT_QUALITY_OPTIONS: Record<
     id: "high",
     label: "Alta calidad",
     badge: "Original",
-    description: "Resolución exacta del video original con detalle máximo (CRF 18).",
+    description: "Resolución y nitidez exactas del video original.",
     maxSide: null,
     preset: "veryfast",
     crf: "18",

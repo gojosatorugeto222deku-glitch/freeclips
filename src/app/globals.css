@@ -28,6 +28,10 @@
   color-scheme: dark;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background-color: #07080b;
   color: #f4f4f5;

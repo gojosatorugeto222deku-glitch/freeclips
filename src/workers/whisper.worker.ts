@@ -71,10 +71,7 @@ async function getOrCreatePipeline(
     type: "status",
     requestId,
     stage: "loading-model",
-    message:
-      device === "webgpu"
-        ? "Cargando Whisper en WebGPU..."
-        : "Cargando Whisper en WebAssembly...",
+    message: "Preparando modelo de voz IA (solo la primera vez)...",
   });
 
   const asr = await pipeline("automatic-speech-recognition", modelId, {
@@ -120,10 +117,7 @@ async function runTranscription(
     type: "status",
     requestId,
     stage: "transcribing",
-    message:
-      device === "webgpu"
-        ? "Transcribiendo español con marcas por palabra (WebGPU)..."
-        : "Transcribiendo español con marcas por palabra (CPU WASM)...",
+    message: "Transcribiendo voz en español palabra por palabra...",
   });
 
   const output = await transcriber(audio, {

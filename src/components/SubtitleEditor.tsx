@@ -139,17 +139,16 @@ export function SubtitleEditor({
           <div>
             <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
               <Sparkles className="h-4 w-4 text-yellow-400" />
-              Transcripción automática (Whisper)
+              Transcripción automática con IA
             </h3>
             <p className="mt-0.5 text-xs text-zinc-400">
-              Detecta voz en español y marcas de tiempo por palabra en tu
-              equipo.
+              Detecta voz en español palabra por palabra sin subir tu video.
             </p>
           </div>
           {activeDevice && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 text-[11px] font-medium text-cyan-300">
               <Cpu className="h-3 w-3" />
-              {activeDevice === "webgpu" ? "WebGPU" : "WASM"}
+              {activeDevice === "webgpu" ? "GPU rápida" : "Estándar"}
             </span>
           )}
         </div>

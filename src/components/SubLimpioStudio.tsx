@@ -8,6 +8,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   CheckCircle2,
@@ -19,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { AdUnlockModal } from "@/components/AdUnlockModal";
+import { BrandLogo } from "@/components/BrandLogo";
 import { ExportPanel } from "@/components/ExportPanel";
 import { Header } from "@/components/Header";
 import { ProSubscriptionModal } from "@/components/ProSubscriptionModal";
@@ -390,13 +392,11 @@ export function SubLimpioStudio() {
 
     try {
       const pcm = await extractAudio16kMono(videoFile, () => {
-        setTranscriptionMessage(
-          "Decodificando audio con FFmpeg.wasm (contenedor MOV/MP4)..."
-        );
+        setTranscriptionMessage("Extrayendo pista de audio del video...");
       });
 
       setTranscriptionStage("loading-model");
-      setTranscriptionMessage("Preparando modelo Whisper...");
+      setTranscriptionMessage("Cargando modelo de voz en español...");
 
       const result = await transcribeAudioInBrowser({
         audio: pcm,
@@ -417,7 +417,7 @@ export function SubLimpioStudio() {
       if (grouped.length === 0) {
         setTranscriptionStage("error");
         setTranscriptionError(
-          "Whisper no detectó palabras claras en español. Puedes probar otro modelo o añadir subtítulos manualmente."
+          "No se detectaron palabras claras en español. Prueba el modo Preciso o añade subtítulos manualmente."
         );
         return;
       }
@@ -700,6 +700,7 @@ export function SubLimpioStudio() {
           <UploadDropzone
             onFileSelected={loadSelectedVideo}
             errorMessage={uploadError}
+            onOpenProModal={() => openProModal()}
           />
         ) : (
           <div className="space-y-4">
@@ -862,9 +863,43 @@ export function SubLimpioStudio() {
         )}
       </main>
 
-      <footer className="border-t border-white/[0.06] py-4 text-center text-xs text-zinc-500">
-        FreeClips · Procesamiento 100% local con Transformers.js (Whisper) y
-        FFmpeg.wasm · Sin marca de agua ni registro
+      <footer className="border-t border-white/[0.06] bg-[#07080b]/80 py-6 text-xs text-zinc-400">
+        <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6">
+          <div className="flex items-center gap-2.5">
+            <BrandLogo size={24} />
+            <span className="font-semibold text-zinc-200">FreeClips</span>
+            <span className="text-zinc-600">·</span>
+            <span className="text-zinc-500">
+              Subtítulos automáticos sin marca de agua
+            </span>
+          </div>
+
+          <nav
+            aria-label="Enlaces legales y soporte"
+            className="flex flex-wrap items-center justify-center gap-4 text-zinc-400"
+          >
+            <button
+              type="button"
+              onClick={() => openProModal()}
+              className="transition hover:text-white"
+            >
+              Planes Pro
+            </button>
+            <Link href="/privacidad" className="transition hover:text-white">
+              Privacidad
+            </Link>
+            <Link href="/terminos" className="transition hover:text-white">
+              Términos
+            </Link>
+            <a
+              href="mailto:seinendeku222@gmail.com"
+              className="transition hover:text-white"
+            >
+              Soporte
+            </a>
+            <span className="text-zinc-600">© 2026</span>
+          </nav>
+        </div>
       </footer>
     </div>
   );

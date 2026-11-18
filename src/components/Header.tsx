@@ -6,10 +6,10 @@ import {
   Download,
   Film,
   ShieldCheck,
-  Sparkles,
   Upload,
   Zap,
 } from "lucide-react";
+import { BrandLogo } from "@/components/BrandLogo";
 import { formatTimeShort } from "@/lib/subtitles";
 import { PLAN_CONFIGS, type QuotaSummary } from "@/lib/usageLimits";
 import type { PlanTier, VideoMetadata } from "@/types/subtitle";
@@ -43,9 +43,7 @@ export function Header({
     <header className="sticky top-0 z-30 border-b border-white/[0.08] bg-[#07080b]/85 backdrop-blur-xl">
       <div className="mx-auto flex h-16 max-w-[1440px] items-center justify-between gap-2 px-4 sm:gap-3 sm:px-6">
         <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-400 to-amber-500 text-black shadow-lg shadow-yellow-500/20">
-            <Sparkles className="h-5 w-5 stroke-[2.2]" />
-          </div>
+          <BrandLogo size={36} />
           <div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-bold tracking-tight text-white">
@@ -56,10 +54,27 @@ export function Header({
               </span>
             </div>
             <p className="hidden text-xs text-zinc-400 md:block">
-              Subtítulos automáticos 100% locales en tu navegador
+              Subtítulos automáticos para Reels, TikTok y Shorts
             </p>
           </div>
         </div>
+
+        {!videoMeta && (
+          <nav
+            aria-label="Navegación principal"
+            className="hidden items-center gap-5 text-xs font-medium text-zinc-400 lg:flex"
+          >
+            <a href="#como-funciona" className="transition hover:text-white">
+              Cómo funciona
+            </a>
+            <a href="#planes" className="transition hover:text-white">
+              Planes
+            </a>
+            <a href="#faq" className="transition hover:text-white">
+              Preguntas
+            </a>
+          </nav>
+        )}
 
         <div className="flex items-center gap-1.5 sm:gap-2.5">
           <button
@@ -108,9 +123,9 @@ export function Header({
           )}
 
           {!videoMeta && (
-            <div className="hidden items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-zinc-300 lg:inline-flex">
+            <div className="hidden items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-zinc-300 sm:inline-flex">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Cero servidores · Sin registro</span>
+              <span>Privacidad total · Sin registro</span>
             </div>
           )}
 

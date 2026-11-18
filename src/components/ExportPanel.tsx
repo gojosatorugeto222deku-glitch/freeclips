@@ -185,8 +185,8 @@ export function ExportPanel({
               Exportar MP4 con subtítulos quemados
             </h3>
             <p className="mt-1 text-xs text-zinc-400">
-              Renderizado local con FFmpeg.wasm en H.264 + AAC compatible con
-              TikTok, Reels y Shorts.
+              Exportación directa en MP4 (H.264 + AAC) compatible con TikTok,
+              Reels y Shorts.
             </p>
           </div>
           <span
@@ -196,7 +196,7 @@ export function ExportPanel({
                 : "border-white/10 bg-white/[0.04] text-zinc-400"
             }`}
           >
-            {isFfmpegWarm ? "Motor listo" : "WASM local"}
+            {isFfmpegWarm ? "Motor listo" : "Listo"}
           </span>
         </div>
 
@@ -373,10 +373,10 @@ export function ExportPanel({
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="truncate text-zinc-200">
                 {stage === "loading-ffmpeg"
-                  ? "Descargando FFmpeg WebAssembly (~31 MB, solo una vez)..."
+                  ? "Preparando motor de exportación (solo la primera vez)..."
                   : stage === "preparing"
-                    ? "Copiando video y fuente tipográfica a MEMFS..."
-                    : "Codificando video con libass + H.264..."}
+                    ? "Preparando pistas de video y subtítulos..."
+                    : "Renderizando MP4 en alta calidad..."}
               </span>
               <span className="shrink-0 font-mono text-yellow-300">
                 {displayPct}%
@@ -393,7 +393,7 @@ export function ExportPanel({
               <span>
                 {etaSec !== null
                   ? `Restante aprox.: ~${etaSec}s`
-                  : "Motor: FFmpeg WASM (libass + H.264)"}
+                  : "Procesamiento seguro en tu dispositivo"}
               </span>
             </div>
           </div>
@@ -467,7 +467,7 @@ export function ExportPanel({
           >
             <span className="inline-flex items-center gap-1.5">
               <Terminal className="h-3.5 w-3.5" />
-              Registro técnico de FFmpeg ({logs.length})
+              Detalles de exportación ({logs.length})
             </span>
             {showLogs ? (
               <ChevronUp className="h-3.5 w-3.5" />

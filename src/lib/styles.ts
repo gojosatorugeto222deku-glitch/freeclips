@@ -183,24 +183,24 @@ export const DEFAULT_SUBTITLE_SETTINGS: SubtitleSettings = {
 export const WHISPER_MODELS: WhisperModelOption[] = [
   {
     id: "onnx-community/whisper-tiny_timestamped",
-    label: "Whisper Tiny",
+    label: "Ligero",
     badge: "Rápido",
     sizeHint: "~45 MB",
-    description: "Descarga veloz e ideal para pruebas rápidas o equipos modestos.",
+    description: "Carga veloz e ideal para clips cortos o equipos modestos.",
   },
   {
     id: "onnx-community/whisper-base_timestamped",
-    label: "Whisper Base",
+    label: "Balanceado",
     badge: "Recomendado",
     sizeHint: "~80 MB",
     description: "Mejor balance entre velocidad en el navegador y precisión en español.",
   },
   {
     id: "onnx-community/whisper-small_timestamped",
-    label: "Whisper Small",
+    label: "Preciso",
     badge: "Alta precisión",
     sizeHint: "~250 MB",
-    description: "Mayor exactitud para acentos complejos o ruido ambiental (requiere más RAM).",
+    description: "Mayor exactitud para acentos complejos o ruido ambiental.",
   },
 ];
 

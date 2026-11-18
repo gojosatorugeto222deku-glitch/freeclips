@@ -115,32 +115,41 @@ export function AdUnlockModal({
               </p>
             </div>
 
-            {/* 2 Reserved Ad Banner Slots */}
+            {/* 2 Partner / Upgrade Highlight Cards */}
             <div className="mt-4 space-y-3">
-              <div
+              <button
+                type="button"
                 data-ad-slot="unlock-banner-1"
-                className="flex min-h-[90px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-amber-400/30 bg-gradient-to-r from-zinc-900 via-[#151822] to-zinc-900 px-4 py-3 text-center"
+                onClick={() => {
+                  onClose();
+                  onOpenProModal();
+                }}
+                className="flex w-full flex-col items-start justify-between gap-2 rounded-xl border border-yellow-400/30 bg-gradient-to-r from-yellow-500/[0.11] via-[#151822] to-zinc-900 px-4 py-3.5 text-left transition hover:border-yellow-400/55 sm:flex-row sm:items-center"
               >
-                <span className="inline-flex items-center gap-1.5 rounded bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-                  <Megaphone className="h-3 w-3 text-amber-400" />
-                  Espacio reservado · Anuncio 1 (728×90 / Adaptable)
+                <div>
+                  <span className="inline-flex items-center gap-1.5 rounded bg-yellow-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-yellow-300">
+                    <Crown className="h-3 w-3" />
+                    FreeClips Plan Creador
+                  </span>
+                  <p className="mt-1.5 text-xs font-medium text-zinc-200">
+                    Sube hasta 20 videos diarios de 15 min, Editor Pro y Vertical 9:16 sin esperas.
+                  </p>
+                </div>
+                <span className="shrink-0 rounded-lg bg-yellow-400 px-3 py-1.5 text-[11px] font-bold text-black">
+                  Desde $3 USD/mes
                 </span>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                  Banner publicitario patrocinado · Carga sin interrumpir tu
-                  edición
-                </p>
-              </div>
+              </button>
 
               <div
                 data-ad-slot="unlock-banner-2"
-                className="flex min-h-[128px] w-full flex-col items-center justify-center rounded-xl border border-dashed border-cyan-400/30 bg-gradient-to-br from-zinc-900 via-[#131924] to-zinc-950 px-4 py-4 text-center"
+                className="flex w-full flex-col justify-center rounded-xl border border-white/10 bg-gradient-to-br from-zinc-900 via-[#131924] to-zinc-950 px-4 py-3.5"
               >
-                <span className="inline-flex items-center gap-1.5 rounded bg-white/[0.06] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-                  <Megaphone className="h-3 w-3 text-cyan-400" />
-                  Espacio reservado · Anuncio 2 (300×250 / Display)
+                <span className="inline-flex w-fit items-center gap-1.5 rounded bg-cyan-500/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-cyan-300">
+                  <Megaphone className="h-3 w-3" />
+                  Tip para más retención en Reels y TikTok
                 </span>
-                <p className="mt-1.5 text-xs text-zinc-500">
-                  Bloque reservado para red de anuncios o patrocinador oficial
+                <p className="mt-1.5 text-xs leading-relaxed text-zinc-300">
+                  Coloca frases cortas de 3 a 4 palabras con el estilo TikTok Amarillo o Neón para captar atención en los primeros 3 segundos sin saturar la pantalla.
                 </p>
               </div>
             </div>

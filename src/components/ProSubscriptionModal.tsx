@@ -103,7 +103,7 @@ export function ProSubscriptionModal({
 
     if (!firebaseReady) {
       setAuthError(
-        "El acceso con Google está terminando de activarse. Puedes usar 'Simular conexión demo' mientras se habilita."
+        "El acceso con Google no está disponible en este momento."
       );
       return;
     }
@@ -129,16 +129,6 @@ export function ProSubscriptionModal({
       .finally(() => {
         setAuthLoading(false);
       });
-  };
-
-  const handleSimulatedGoogleDemo = () => {
-    setAuthError(null);
-    onUpdateDiscountState({
-      ...discountState,
-      googleConnected: true,
-      googleEmail: "demo@freeclips.local",
-      googleDisplayName: "Cuenta Google (Demo local)",
-    });
   };
 
   const handleGoogleDisconnect = () => {
@@ -500,17 +490,6 @@ export function ProSubscriptionModal({
                         )}
                         <span>Conectar con Google</span>
                       </button>
-                      {!firebaseReady && (
-                        <div className="text-[10px] text-amber-200/90">
-                          <button
-                            type="button"
-                            onClick={handleSimulatedGoogleDemo}
-                            className="font-semibold text-yellow-300 underline hover:text-yellow-200"
-                          >
-                            Simular conexión demo
-                          </button>
-                        </div>
-                      )}
                       {authError && (
                         <p className="text-[10px] text-red-300">{authError}</p>
                       )}

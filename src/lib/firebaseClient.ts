@@ -34,7 +34,7 @@ let cachedAuth: Auth | null = null;
 function getFirebaseAuthInstance(): Auth {
   if (!isFirebaseConfigured()) {
     throw new Error(
-      "Faltan las variables NEXT_PUBLIC_FIREBASE_* en .env.local para iniciar sesión con Google."
+      "El acceso con Google no está disponible temporalmente."
     );
   }
   if (!cachedApp) {
