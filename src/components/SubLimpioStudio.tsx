@@ -749,7 +749,7 @@ export function SubLimpioStudio() {
       </main>
 
       <footer className="border-t border-white/[0.06] py-4 text-center text-xs text-zinc-500">
-        SubLimpio · Procesamiento 100% local con Transformers.js (Whisper) y
+        FreeClips · Procesamiento 100% local con Transformers.js (Whisper) y
         FFmpeg.wasm · Sin marca de agua ni registro
       </footer>
     </div>

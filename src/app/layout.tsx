@@ -15,7 +15,7 @@ const monoFont = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "SubLimpio — Subtítulos automáticos sin marca de agua",
+  title: "FreeClips — Subtítulos automáticos sin marca de agua",
   description:
     "Agrega subtítulos automáticos en español a tus videos cortos (MP4/MOV) 100% en tu navegador, sin registro ni marcas de agua, con Whisper y FFmpeg.wasm.",
 };

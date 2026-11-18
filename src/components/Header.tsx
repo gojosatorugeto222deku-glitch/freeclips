@@ -49,7 +49,7 @@ export function Header({
           <div>
             <div className="flex items-center gap-2">
               <span className="text-lg font-bold tracking-tight text-white">
-                SubLimpio
+                FreeClips
               </span>
               <span className="hidden rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-300 sm:inline-flex">
                 Sin marca de agua

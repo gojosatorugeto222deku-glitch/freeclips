@@ -100,7 +100,7 @@ export function SubtitleEditor({
     const link = document.createElement("a");
     const base = videoName.replace(/\.[^.]+$/, "");
     link.href = url;
-    link.download = `${base}-sublimpio.srt`;
+    link.download = `${base}-freeclips.srt`;
     link.click();
     URL.revokeObjectURL(url);
   };

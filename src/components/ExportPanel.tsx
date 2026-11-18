@@ -146,7 +146,7 @@ export function ExportPanel({
       : null;
 
   const baseName = videoMeta.name.replace(/\.[^.]+$/, "");
-  const outputFileName = `${baseName}-sublimpio.mp4`;
+  const outputFileName = `${baseName}-freeclips.mp4`;
 
   const handleDownloadSrt = () => {
     const srt = cuesToSrt(cues, settings.uppercase);
@@ -154,7 +154,7 @@ export function ExportPanel({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${baseName}-sublimpio.srt`;
+    link.download = `${baseName}-freeclips.srt`;
     link.click();
     URL.revokeObjectURL(url);
   };
@@ -169,7 +169,7 @@ export function ExportPanel({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${baseName}-sublimpio.ass`;
+    link.download = `${baseName}-freeclips.ass`;
     link.click();
     URL.revokeObjectURL(url);
   };

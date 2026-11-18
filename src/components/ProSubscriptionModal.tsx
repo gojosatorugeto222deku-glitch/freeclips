@@ -125,7 +125,7 @@ export function ProSubscriptionModal({
     onUpdateDiscountState({
       ...discountState,
       googleConnected: true,
-      googleEmail: "demo@sublimpio.local",
+      googleEmail: "demo@freeclips.local",
       googleDisplayName: "Cuenta Google (Demo local)",
     });
   };
@@ -147,9 +147,9 @@ export function ProSubscriptionModal({
       process.env.NEXT_PUBLIC_APP_URL?.trim() ||
       (typeof window !== "undefined"
         ? window.location.origin
-        : "https://sublimpio.app");
+        : "https://freeclips.up.railway.app");
     const shareText =
-      "Estoy creando subtítulos automáticos sin marca de agua directo en el navegador con SubLimpio";
+      "Estoy creando subtítulos automáticos sin marca de agua directo en el navegador con FreeClips";
 
     let intentUrl = "";
     if (network === "x") {
@@ -213,7 +213,7 @@ export function ProSubscriptionModal({
         <div className="pr-8">
           <div className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/35 bg-yellow-400/12 px-3 py-1 text-[11px] font-semibold text-yellow-300">
             <Crown className="h-3.5 w-3.5" />
-            <span>SubLimpio Planes · Sin marca de agua</span>
+            <span>FreeClips Planes · Sin marca de agua</span>
           </div>
           <h2
             id="pro-modal-title"
@@ -252,7 +252,7 @@ export function ProSubscriptionModal({
                 </span>
               </div>
               <p className="mt-1.5 text-xs text-zinc-400">
-                Para probar SubLimpio y crear clips cortos sin registro.
+                Para probar FreeClips y crear clips cortos sin registro.
               </p>
 
               <ul className="mt-4 space-y-2 text-xs text-zinc-300">
