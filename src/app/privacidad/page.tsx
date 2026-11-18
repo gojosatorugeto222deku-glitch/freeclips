@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
   title: "Política de Privacidad",
   description:
-    "Conoce cómo FreeClips protege tu privacidad procesando tus videos directamente en tu dispositivo.",
+    "Conoce cómo FreeClips protege tu privacidad, el uso de cookies publicitarias de Google AdSense, autenticación con Google y pagos en Stripe.",
 };
 
 export default function PrivacidadPage() {
   return (
-    <div className="studio-grid-bg min-h-screen px-4 py-10 sm:px-6">
-      <div className="mx-auto max-w-3xl">
+    <div className="studio-grid-bg flex min-h-screen flex-col">
+      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
         <div className="mb-8 flex items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
           <Link href="/" className="flex items-center gap-3">
             <BrandLogo size={34} />
@@ -42,45 +43,90 @@ export default function PrivacidadPage() {
               1. Procesamiento privado de tus videos
             </h2>
             <p>
-              FreeClips transcribe el audio y renderiza los subtítulos directamente
-              en el navegador de tu dispositivo. Tus archivos de video y audio no
-              se suben ni se almacenan en servidores propios de FreeClips.
+              FreeClips transcribe el audio y renderiza los subtítulos
+              directamente en el navegador de tu dispositivo. Tus archivos de
+              video y audio no se suben ni se almacenan en servidores propios de
+              FreeClips.
             </p>
           </section>
 
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-white">
-              2. Datos de cuenta y preferencias locales
+              2. Datos de cuenta y almacenamiento local
             </h2>
             <p>
               Usamos almacenamiento local del navegador para recordar tu cuota
-              diaria gratuita y el estado de tu plan. Si decides conectar tu cuenta
-              de Google mediante Firebase Authentication para acceder al descuento
-              del Plan Creador, solo recibimos tu nombre, correo electrónico y foto
-              de perfil asociados a esa sesión.
+              diaria gratuita y el estado de tu plan. Si decides conectar tu
+              cuenta de Google mediante Firebase Authentication para acceder al
+              descuento del Plan Creador, recibimos únicamente tu nombre, correo
+              electrónico y foto de perfil asociados a esa sesión.
             </p>
           </section>
 
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-white">
-              3. Pagos con Stripe
+              3. Publicidad y cookies de terceros (Google AdSense)
+            </h2>
+            <p>
+              FreeClips utiliza Google AdSense para mostrar anuncios que ayudan a
+              financiar el acceso gratuito diario. Proveedores terceros,
+              incluido Google, utilizan cookies para mostrar anuncios relevantes
+              según tus visitas anteriores a este sitio web o a otros sitios en
+              Internet.
+            </p>
+            <p>
+              El uso de cookies publicitarias por parte de Google permite mostrar
+              anuncios basados en tus intereses. Puedes consultar cómo Google usa
+              la información en{" "}
+              <a
+                href="https://policies.google.com/technologies/ads"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-yellow-300 underline hover:text-yellow-200"
+              >
+                policies.google.com/technologies/ads
+              </a>{" "}
+              o inhabilitar la publicidad personalizada en cualquier momento en{" "}
+              <a
+                href="https://adssettings.google.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-yellow-300 underline hover:text-yellow-200"
+              >
+                adssettings.google.com
+              </a>
+              .
+            </p>
+          </section>
+
+          <section className="space-y-2">
+            <h2 className="text-base font-semibold text-white">
+              4. Pagos con Stripe
             </h2>
             <p>
               Las suscripciones del Plan Creador se procesan de forma segura a
-              través de Stripe. FreeClips nunca ve ni almacena los datos completos
-              de tu tarjeta bancaria; únicamente consultamos el estado de tu
-              suscripción o sesión mediante el identificador de pago y el correo
+              través de Stripe. FreeClips nunca ve ni almacena los datos
+              completos de tu tarjeta bancaria; únicamente consultamos el estado
+              de tu suscripción mediante el identificador de pago o correo
               asociado en Stripe.
             </p>
           </section>
 
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-white">
-              4. Contacto
+              5. Contacto y derechos de privacidad
             </h2>
             <p>
-              Si tienes dudas sobre privacidad o deseas solicitar información sobre
-              tu cuenta, escríbenos a{" "}
+              Si tienes dudas sobre privacidad o deseas solicitar información o
+              eliminación de datos vinculados a tu acceso, escríbenos mediante
+              nuestra página de{" "}
+              <Link
+                href="/contacto"
+                className="text-yellow-300 underline hover:text-yellow-200"
+              >
+                Contacto
+              </Link>{" "}
+              o directamente a{" "}
               <a
                 href="mailto:seinendeku222@gmail.com"
                 className="text-yellow-300 underline hover:text-yellow-200"
@@ -92,6 +138,8 @@ export default function PrivacidadPage() {
           </section>
         </article>
       </div>
+
+      <SiteFooter />
     </div>
   );
 }

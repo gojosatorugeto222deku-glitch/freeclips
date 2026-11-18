@@ -8,7 +8,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import Link from "next/link";
 import {
   AlertCircle,
   CheckCircle2,
@@ -20,10 +19,10 @@ import {
   X,
 } from "lucide-react";
 import { AdUnlockModal } from "@/components/AdUnlockModal";
-import { BrandLogo } from "@/components/BrandLogo";
 import { ExportPanel } from "@/components/ExportPanel";
 import { Header } from "@/components/Header";
 import { ProSubscriptionModal } from "@/components/ProSubscriptionModal";
+import { SiteFooter } from "@/components/SiteFooter";
 import { StylePicker } from "@/components/StylePicker";
 import { SubtitleEditor } from "@/components/SubtitleEditor";
 import {
@@ -946,44 +945,7 @@ export function SubLimpioStudio() {
         )}
       </main>
 
-      <footer className="border-t border-white/[0.06] bg-[#07080b]/80 py-6 text-xs text-zinc-400">
-        <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6">
-          <div className="flex items-center gap-2.5">
-            <BrandLogo size={24} />
-            <span className="font-semibold text-zinc-200">FreeClips</span>
-            <span className="text-zinc-600">·</span>
-            <span className="text-zinc-500">
-              Subtítulos automáticos sin marca de agua
-            </span>
-          </div>
-
-          <nav
-            aria-label="Enlaces legales y soporte"
-            className="flex flex-wrap items-center justify-center gap-4 text-zinc-400"
-          >
-            <button
-              type="button"
-              onClick={() => openProModal()}
-              className="transition hover:text-white"
-            >
-              Planes Pro
-            </button>
-            <Link href="/privacidad" className="transition hover:text-white">
-              Privacidad
-            </Link>
-            <Link href="/terminos" className="transition hover:text-white">
-              Términos
-            </Link>
-            <a
-              href="mailto:seinendeku222@gmail.com"
-              className="transition hover:text-white"
-            >
-              Soporte
-            </a>
-            <span className="text-zinc-600">© 2026</span>
-          </nav>
-        </div>
-      </footer>
+      <SiteFooter onOpenProModal={() => openProModal()} />
     </div>
   );
 }

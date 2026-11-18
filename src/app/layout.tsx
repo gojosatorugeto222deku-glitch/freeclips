@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     template: "%s · FreeClips",
   },
   description:
-    "Crea subtítulos dinámicos en español para tus videos cortos (MP4 y MOV) directo en la web, sin marca de agua ni registro. Exporta en MP4 HD listo para TikTok, Reels y Shorts.",
+    "Crea subtítulos dinámicos en español para tus videos cortos (MP4 y MOV) directo en la web, sin marca de agua. Exporta en MP4 HD listo para TikTok, Reels y Shorts.",
   keywords: [
     "subtítulos automáticos",
     "subtítulos sin marca de agua",
@@ -34,6 +34,9 @@ export const metadata: Metadata = {
   ],
   alternates: {
     canonical: "/",
+  },
+  other: {
+    "google-adsense-account": "ca-pub-5723999557057679",
   },
   openGraph: {
     type: "website",
@@ -63,6 +66,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={`${uiFont.variable} ${monoFont.variable} dark`}>
+      <head>
+        <script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-5723999557057679"
+          crossOrigin="anonymous"
+        />
+      </head>
       <body className="min-h-screen bg-[#07080b] text-zinc-100 antialiased selection:bg-yellow-400/30 selection:text-yellow-100">
         {children}
       </body>

@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
-  title: "Términos de Servicio",
+  title: "Términos de Uso",
   description:
-    "Condiciones de uso del editor de subtítulos FreeClips y de la suscripción Plan Creador.",
+    "Condiciones y términos de uso del editor de subtítulos FreeClips y de la suscripción Plan Creador.",
 };
 
 export default function TerminosPage() {
   return (
-    <div className="studio-grid-bg min-h-screen px-4 py-10 sm:px-6">
-      <div className="mx-auto max-w-3xl">
+    <div className="studio-grid-bg flex min-h-screen flex-col">
+      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
         <div className="mb-8 flex items-center justify-between gap-4 border-b border-white/[0.08] pb-5">
           <Link href="/" className="flex items-center gap-3">
             <BrandLogo size={34} />
@@ -30,7 +31,7 @@ export default function TerminosPage() {
         <article className="space-y-6 rounded-2xl border border-white/[0.08] bg-[#0f1117]/95 p-6 text-sm leading-relaxed text-zinc-300 sm:p-8">
           <header>
             <h1 className="text-2xl font-bold text-white sm:text-3xl">
-              Términos de Servicio
+              Términos de Uso
             </h1>
             <p className="mt-1 text-xs text-zinc-500">
               Última actualización: noviembre de 2026
@@ -39,36 +40,45 @@ export default function TerminosPage() {
 
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-white">
-              1. Uso del servicio
+              1. Uso del servicio y propiedad del contenido
             </h2>
             <p>
               FreeClips ofrece herramientas en línea para generar, editar y
-              exportar subtítulos en video. Conservas el 100% de los derechos
-              sobre el contenido que procesas y exportas con la plataforma.
+              exportar subtítulos automáticos en video. Conservas el 100% de los
+              derechos y titularidad sobre los videos y subtítulos que procesas
+              en la plataforma, y eres responsable de contar con los derechos de
+              uso del material audiovisual que subes al editor.
             </p>
           </section>
 
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-white">
-              2. Planes y suscripciones
+              2. Planes, cuotas y suscripciones
             </h2>
             <p>
               El Plan Gratuito incluye 5 videos diarios de hasta 90 segundos sin
               marca de agua, ampliables mediante recargas gratuitas dentro de la
-              web. El Plan Creador amplía los límites diarios, duración máxima de
+              web. El Plan Creador amplía la cuota diaria, duración máxima de
               video, edición visual avanzada y conversión 9:16 por una tarifa
-              mensual recurrente procesada en Stripe.
+              mensual recurrente procesada a través de Stripe.
             </p>
           </section>
 
           <section className="space-y-2">
             <h2 className="text-base font-semibold text-white">
-              3. Cancelación y soporte
+              3. Disponibilidad, cancelación y soporte
             </h2>
             <p>
-              Puedes cancelar tu suscripción mensual en cualquier momento antes del
-              siguiente ciclo de facturación. Para soporte de facturación o dudas
-              técnicas, contáctanos en{" "}
+              Puedes cancelar tu suscripción mensual antes del siguiente ciclo
+              de facturación. Para soporte de facturación, consultas legales o
+              reportes técnicos, comunícate a través de nuestra página de{" "}
+              <Link
+                href="/contacto"
+                className="text-yellow-300 underline hover:text-yellow-200"
+              >
+                Contacto
+              </Link>{" "}
+              o escribe a{" "}
               <a
                 href="mailto:seinendeku222@gmail.com"
                 className="text-yellow-300 underline hover:text-yellow-200"
@@ -80,6 +90,8 @@ export default function TerminosPage() {
           </section>
         </article>
       </div>
+
+      <SiteFooter />
     </div>
   );
 }
