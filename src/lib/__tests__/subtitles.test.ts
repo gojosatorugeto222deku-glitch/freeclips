@@ -8,6 +8,8 @@ import {
 import {
   computeTargetExportDimensions,
   formatExportError,
+  shouldUseSafe720pExport,
+  videoExceeds720p,
 } from "@/lib/exportUtils";
 import { parseFontMetadataFromBytes } from "@/lib/fontParser";
 import { resolveStripeCheckoutLink } from "@/lib/stripeLinks";
@@ -248,6 +250,57 @@ describe("exportUtils", () => {
       height: 1920,
       scaled: true,
       verticalCropped: true,
+    });
+  });
+
+  it("caps resolution to max 720p when mobile safe-mode or >720p cap is enabled", () => {
+    expect(videoExceeds720p(1080, 1920)).toBe(true);
+    expect(videoExceeds720p(1920, 1080)).toBe(true);
+    expect(videoExceeds720p(720, 1280)).toBe(false);
+    expect(videoExceeds720p(640, 480)).toBe(false);
+
+    expect(shouldUseSafe720pExport(720, 1280, true)).toBe(true);
+    expect(shouldUseSafe720pExport(1080, 1920, false)).toBe(true);
+    expect(shouldUseSafe720pExport(720, 1280, false)).toBe(false);
+
+    // 1080p vertical -> 720x1280 even when user selects high quality
+    expect(
+      computeTargetExportDimensions(1080, 1920, "high", false, true)
+    ).toEqual({
+      width: 720,
+      height: 1280,
+      scaled: true,
+      verticalCropped: false,
+    });
+
+    // 4K horizontal -> 1280x720
+    expect(
+      computeTargetExportDimensions(3840, 2160, "high", false, true)
+    ).toEqual({
+      width: 1280,
+      height: 720,
+      scaled: true,
+      verticalCropped: false,
+    });
+
+    // Vertical 9:16 conversion on mobile caps at 720x1280
+    expect(
+      computeTargetExportDimensions(1920, 1080, "balanced", true, true)
+    ).toEqual({
+      width: 720,
+      height: 1280,
+      scaled: true,
+      verticalCropped: true,
+    });
+
+    // Already <=720p preserves native even dimensions
+    expect(
+      computeTargetExportDimensions(640, 480, "high", false, true)
+    ).toEqual({
+      width: 640,
+      height: 480,
+      scaled: false,
+      verticalCropped: false,
     });
   });
 

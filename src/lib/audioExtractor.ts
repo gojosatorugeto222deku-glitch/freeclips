@@ -1,4 +1,7 @@
-import { extractAudioPcmWithFFmpeg } from "@/lib/ffmpegClient";
+import {
+  disposeFFmpeg,
+  extractAudioPcmWithFFmpeg,
+} from "@/lib/ffmpegClient";
 
 const TARGET_SAMPLE_RATE = 16000;
 
@@ -21,13 +24,18 @@ export async function extractAudio16kMono(
   }
 
   onFallbackToFFmpeg?.();
-  const pcm = await extractAudioPcmWithFFmpeg(file);
-  if (pcm.length === 0) {
-    throw new Error(
-      "No se detectó ninguna pista de audio en este video. Asegúrate de que el archivo tenga sonido."
-    );
+  try {
+    const pcm = await extractAudioPcmWithFFmpeg(file);
+    if (pcm.length === 0) {
+      throw new Error(
+        "No se detectó ninguna pista de audio en este video. Asegúrate de que el archivo tenga sonido."
+      );
+    }
+    return pcm;
+  } finally {
+    // Release FFmpeg WASM heap immediately before Phase 1 Whisper allocates its model/tensors.
+    disposeFFmpeg();
   }
-  return pcm;
 }
 
 async function decodeWithWebAudio(file: File): Promise<Float32Array> {
@@ -44,7 +52,7 @@ async function decodeWithWebAudio(file: File): Promise<Float32Array> {
   const audioCtx = new AudioCtx();
 
   try {
-    const decoded = await audioCtx.decodeAudioData(buffer.slice(0));
+    const decoded = await audioCtx.decodeAudioData(buffer);
     if (decoded.numberOfChannels === 0 || decoded.duration <= 0) {
       throw new Error("El video no contiene audio");
     }

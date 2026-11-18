@@ -44,28 +44,64 @@ export const EXPORT_QUALITY_OPTIONS: Record<
 };
 
 /**
+ * Returns true if the source video exceeds 720p (short side > 720 or long side > 1280).
+ */
+export function videoExceeds720p(width: number, height: number): boolean {
+  const safeW = Math.max(2, Math.round(width));
+  const safeH = Math.max(2, Math.round(height));
+  return Math.min(safeW, safeH) > 720 || Math.max(safeW, safeH) > 1280;
+}
+
+export function shouldUseSafe720pExport(
+  width: number,
+  height: number,
+  isMobile: boolean
+): boolean {
+  return isMobile || videoExceeds720p(width, height);
+}
+
+/**
  * Computes even (divisible-by-2) target dimensions respecting aspect ratio,
- * optional 9:16 vertical conversion, and quality preset maxSide cap.
+ * optional 9:16 vertical conversion, quality preset cap, and optional 720p mobile/OOM cap.
  */
 export function computeTargetExportDimensions(
   width: number,
   height: number,
   quality: ExportQualityPreset,
-  convertToVertical916 = false
+  convertToVertical916 = false,
+  capTo720p = false
 ): { width: number; height: number; scaled: boolean; verticalCropped: boolean } {
   const safeW = Math.max(2, Math.floor(width / 2) * 2);
   const safeH = Math.max(2, Math.floor(height / 2) * 2);
   const maxSide = EXPORT_QUALITY_OPTIONS[quality].maxSide;
 
   if (convertToVertical916) {
-    const targetW = quality === "fast" ? 720 : 1080;
-    const targetH = quality === "fast" ? 1280 : 1920;
+    const use720 = capTo720p || quality === "fast";
+    const targetW = use720 ? 720 : 1080;
+    const targetH = use720 ? 1280 : 1920;
     return {
       width: targetW,
       height: targetH,
       scaled: targetW !== safeW || targetH !== safeH,
       verticalCropped: Math.abs(safeW / safeH - 9 / 16) > 0.02,
     };
+  }
+
+  if (capTo720p) {
+    const longest = Math.max(safeW, safeH);
+    const shortest = Math.min(safeW, safeH);
+    const ratio = Math.min(1, 1280 / longest, 720 / shortest);
+    if (ratio < 1) {
+      const nextW = Math.max(2, Math.round((safeW * ratio) / 2) * 2);
+      const nextH = Math.max(2, Math.round((safeH * ratio) / 2) * 2);
+      return {
+        width: nextW,
+        height: nextH,
+        scaled: nextW !== safeW || nextH !== safeH,
+        verticalCropped: false,
+      };
+    }
+    return { width: safeW, height: safeH, scaled: false, verticalCropped: false };
   }
 
   if (!maxSide) {

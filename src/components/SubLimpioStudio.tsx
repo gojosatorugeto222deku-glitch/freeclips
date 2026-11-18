@@ -33,10 +33,19 @@ import {
 import { VideoStage } from "@/components/VideoStage";
 import { generateAssSubtitles } from "@/lib/assGenerator";
 import { extractAudio16kMono } from "@/lib/audioExtractor";
-import { computeTargetExportDimensions } from "@/lib/exportUtils";
+import {
+  formatFileSizeMb,
+  isMobileBrowser,
+  MOBILE_WARNING_BYTES,
+} from "@/lib/device";
+import {
+  computeTargetExportDimensions,
+  shouldUseSafe720pExport,
+} from "@/lib/exportUtils";
 import {
   burnSubtitlesWithFFmpeg,
   cancelFFmpegExport,
+  disposeFFmpeg,
   isFFmpegLoaded,
   preloadFFmpeg,
 } from "@/lib/ffmpegClient";
@@ -72,7 +81,10 @@ import {
   saveUsageState,
   subscribeLocalStorage,
 } from "@/lib/usageLimits";
-import { transcribeAudioInBrowser } from "@/lib/whisperClient";
+import {
+  disposeWhisperWorker,
+  transcribeAudioInBrowser,
+} from "@/lib/whisperClient";
 import type {
   ExportQualityPreset,
   ExportStage,
@@ -110,6 +122,8 @@ export function SubLimpioStudio() {
   const [adModalOpen, setAdModalOpen] = useState(false);
   const [proModalOpen, setProModalOpen] = useState(false);
   const [proModalReason, setProModalReason] = useState<string | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
+  const [mobileWarningDismissed, setMobileWarningDismissed] = useState(false);
   const [checkoutBanner, setCheckoutBanner] = useState<{
     type: "success" | "info" | "error";
     text: string;
@@ -176,14 +190,28 @@ export function SubLimpioStudio() {
   }, [exportedVideoUrl]);
 
   useEffect(() => {
-    if (activeTab === "export") {
-      preloadFFmpeg();
+    Promise.resolve().then(() => {
+      setIsMobile(isMobileBrowser());
+    });
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "export" && !isMobile) {
+      let cancelled = false;
+      void disposeWhisperWorker().then(() => {
+        if (!cancelled) {
+          preloadFFmpeg();
+        }
+      });
       const id = window.setInterval(() => {
         setIsFfmpegWarm(isFFmpegLoaded());
       }, 600);
-      return () => window.clearInterval(id);
+      return () => {
+        cancelled = true;
+        window.clearInterval(id);
+      };
     }
-  }, [activeTab]);
+  }, [activeTab, isMobile]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -322,6 +350,9 @@ export function SubLimpioStudio() {
         return;
       }
 
+      const mobileNow = isMobileBrowser();
+      setIsMobile(mobileNow);
+      setMobileWarningDismissed(false);
       setUploadError(null);
       if (exportedVideoUrl) {
         URL.revokeObjectURL(exportedVideoUrl);
@@ -385,6 +416,10 @@ export function SubLimpioStudio() {
     if (!videoFile) return;
     if (!checkCanProcessVideo()) return;
 
+    // Phase 1 separation: guarantee FFmpeg WASM heap is unloaded before loading AI tensors.
+    disposeFFmpeg();
+    setIsFfmpegWarm(false);
+
     setTranscriptionError(null);
     setModelProgress(null);
     setTranscriptionStage("extracting-audio");
@@ -434,6 +469,10 @@ export function SubLimpioStudio() {
           ? err.message
           : "No se pudo completar la transcripción en el navegador."
       );
+    } finally {
+      // Phase 1 cleanup: completely destroy/release Transformers.js pipeline & worker RAM
+      // before the user triggers Phase 2 (FFmpeg export).
+      await disposeWhisperWorker();
     }
   };
 
@@ -553,13 +592,24 @@ export function SubLimpioStudio() {
     setExportStage("loading-ffmpeg");
 
     try {
+      // Sequential Phase 2 guard: release any lingering Whisper worker/tensors and yield briefly
+      // so mobile browsers reclaim RAM before allocating FFmpeg WASM.
+      await disposeWhisperWorker();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+
       const effectiveStyle = resolveEffectiveStyle(settings);
       const convertVertical = Boolean(settings.convertToVertical916);
+      const safe720p = shouldUseSafe720pExport(
+        videoMeta.width,
+        videoMeta.height,
+        isMobile
+      );
       const targetDims = computeTargetExportDimensions(
         videoMeta.width,
         videoMeta.height,
         exportQuality,
-        convertVertical
+        convertVertical,
+        safe720p
       );
       const assContent = generateAssSubtitles(cues, {
         width: targetDims.width,
@@ -576,6 +626,7 @@ export function SubLimpioStudio() {
         sourceHeight: videoMeta.height,
         quality: exportQuality,
         convertToVertical916: convertVertical,
+        isMobile,
         durationSec: videoMeta.duration || undefined,
         onStage: (stage) => {
           setExportStage(stage);
@@ -598,17 +649,18 @@ export function SubLimpioStudio() {
       setExportedVideoUrl(result.url);
       setExportedSizeBytes(result.sizeBytes);
       setExportedDims({ width: result.width, height: result.height });
-      setIsFfmpegWarm(true);
+      setIsFfmpegWarm(!isMobile);
       setExportStage("done");
       setIsExportStale(false);
       markVideoCreditConsumed();
     } catch (err) {
       if (cancelRequestedRef.current) return;
+      setIsFfmpegWarm(false);
       setExportStage("error");
       setExportError(
         err instanceof Error
           ? err.message
-          : "No se pudo exportar el video con FFmpeg.wasm."
+          : "No se pudo exportar el video en este dispositivo."
       );
     }
   };
@@ -704,6 +756,36 @@ export function SubLimpioStudio() {
           />
         ) : (
           <div className="space-y-4">
+            {isMobile &&
+              videoMeta.sizeBytes > MOBILE_WARNING_BYTES &&
+              !mobileWarningDismissed && (
+                <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-400/35 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
+                  <div className="flex items-start gap-2.5">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
+                    <div>
+                      <p className="font-semibold text-amber-200">
+                        Archivo pesado para celular (
+                        {formatFileSizeMb(videoMeta.sizeBytes)} MB)
+                      </p>
+                      <p className="mt-0.5 text-amber-100/90">
+                        En celulares Android o iPhone, videos mayores a 60 MB
+                        pueden saturar la memoria del navegador. Recomendamos
+                        subir clips cortos (15–60 seg) para máxima velocidad; al
+                        exportar aplicaremos escala automática a máximo 720p.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMobileWarningDismissed(true)}
+                    aria-label="Cerrar aviso de tamaño móvil"
+                    className="rounded p-1 text-amber-300 hover:bg-amber-400/20 hover:text-white"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              )}
+
             {durationBlocked && (
               <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/35 bg-amber-400/10 px-4 py-3 text-xs text-amber-100">
                 <div className="flex items-center gap-2.5">
@@ -844,6 +926,7 @@ export function SubLimpioStudio() {
                       downloadProgress={downloadProgress}
                       progress={exportProgress}
                       isFfmpegWarm={isFfmpegWarm}
+                      isMobile={isMobile}
                       logs={ffmpegLogs}
                       errorMessage={exportError}
                       exportedVideoUrl={exportedVideoUrl}

@@ -39,6 +39,43 @@ export function resetWhisperWorker(): void {
   }
 }
 
+/**
+ * Instructs the Whisper worker to dispose Transformers.js pipeline tensors,
+ * then terminates the worker completely to guarantee RAM release before Phase 2 (FFmpeg).
+ */
+export async function disposeWhisperWorker(): Promise<void> {
+  const worker = sharedWorker;
+  if (!worker) return;
+
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      worker.removeEventListener("message", onDisposed);
+      window.clearTimeout(timeoutId);
+      resolve();
+    };
+    const onDisposed = (event: MessageEvent) => {
+      if (event.data?.type === "disposed") {
+        finish();
+      }
+    };
+    const timeoutId = window.setTimeout(finish, 300);
+    worker.addEventListener("message", onDisposed);
+    try {
+      worker.postMessage({ type: "dispose" });
+    } catch {
+      finish();
+    }
+  });
+
+  if (sharedWorker === worker) {
+    worker.terminate();
+    sharedWorker = null;
+  }
+}
+
 export function transcribeAudioInBrowser({
   audio,
   modelId,

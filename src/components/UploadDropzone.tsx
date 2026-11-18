@@ -190,7 +190,7 @@ export function UploadDropzone({
 
           <div className="mt-6 flex flex-wrap items-center justify-center gap-2 text-[11px] text-zinc-400">
             <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
-              Sin registro para empezar
+              Listo en segundos
             </span>
             <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1">
               Audio 100% privado

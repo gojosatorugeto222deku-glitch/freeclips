@@ -125,7 +125,7 @@ export function Header({
           {!videoMeta && (
             <div className="hidden items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-zinc-300 sm:inline-flex">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Privacidad total · Sin registro</span>
+              <span>Privacidad total</span>
             </div>
           )}
 

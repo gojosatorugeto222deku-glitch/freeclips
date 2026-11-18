@@ -21,6 +21,7 @@ import { generateAssSubtitles } from "@/lib/assGenerator";
 import {
   computeTargetExportDimensions,
   EXPORT_QUALITY_OPTIONS,
+  shouldUseSafe720pExport,
 } from "@/lib/exportUtils";
 import { POSITION_LABELS, SIZE_LABELS, SUBTITLE_STYLES } from "@/lib/styles";
 import { cuesToSrt } from "@/lib/subtitles";
@@ -46,6 +47,7 @@ interface ExportPanelProps {
   downloadProgress: number;
   progress: number;
   isFfmpegWarm: boolean;
+  isMobile: boolean;
   logs: string[];
   errorMessage: string | null;
   exportedVideoUrl: string | null;
@@ -86,6 +88,7 @@ export function ExportPanel({
   downloadProgress,
   progress,
   isFfmpegWarm,
+  isMobile,
   logs,
   errorMessage,
   exportedVideoUrl,
@@ -120,11 +123,17 @@ export function ExportPanel({
     };
   }, [isBusy]);
 
+  const safe720pActive = shouldUseSafe720pExport(
+    videoMeta.width,
+    videoMeta.height,
+    isMobile
+  );
   const targetDims = computeTargetExportDimensions(
     videoMeta.width,
     videoMeta.height,
     quality,
-    Boolean(settings.convertToVertical916)
+    Boolean(settings.convertToVertical916),
+    safe720pActive
   );
   const maxDurationLabel = PLAN_CONFIGS[planTier].maxDurationLabel;
 
@@ -242,6 +251,12 @@ export function ExportPanel({
           <p className="mt-1.5 text-[11px] text-zinc-500">
             {EXPORT_QUALITY_OPTIONS[quality].description}
           </p>
+          {safe720pActive && (
+            <p className="mt-1.5 rounded-lg border border-emerald-500/25 bg-emerald-500/[0.07] px-2.5 py-1.5 text-[11px] text-emerald-200">
+              Optimización RAM activa: se exportará a máximo 720p con compresión
+              rápida de 1 hilo para evitar cierres por memoria.
+            </p>
+          )}
         </div>
 
         <dl className="mt-4 grid grid-cols-2 gap-2.5 text-xs">

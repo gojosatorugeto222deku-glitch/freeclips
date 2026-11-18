@@ -2,7 +2,9 @@ import {
   computeTargetExportDimensions,
   EXPORT_QUALITY_OPTIONS,
   formatExportError,
+  shouldUseSafe720pExport,
 } from "@/lib/exportUtils";
+import { disposeWhisperWorker } from "@/lib/whisperClient";
 import type { ExportQualityPreset } from "@/types/subtitle";
 
 type LogCallback = (event: { type: string; message: string }) => void;
@@ -139,8 +141,10 @@ class FFmpegBridge {
     return this.send<DirEntry[]>("LIST_DIR", { path });
   }
 
-  terminate(): void {
-    this.rejects.forEach((rej) => rej(new Error("Exportación cancelada.")));
+  terminate(rejectInFlight = true): void {
+    if (rejectInFlight) {
+      this.rejects.forEach((rej) => rej(new Error("Exportación cancelada.")));
+    }
     this.resolves.clear();
     this.rejects.clear();
     this.worker?.terminate();
@@ -151,8 +155,21 @@ class FFmpegBridge {
 
 let ffmpegInstance: FFmpegBridge | null = null;
 let loadPromise: Promise<FFmpegBridge> | null = null;
+let activeCoreBlobUrl: string | null = null;
+let activeWasmBlobUrl: string | null = null;
 let latestDownloadProgress = 0;
 const downloadSubscribers = new Set<(ratio: number) => void>();
+
+function revokeCoreBlobUrls(): void {
+  if (activeCoreBlobUrl) {
+    URL.revokeObjectURL(activeCoreBlobUrl);
+    activeCoreBlobUrl = null;
+  }
+  if (activeWasmBlobUrl) {
+    URL.revokeObjectURL(activeWasmBlobUrl);
+    activeWasmBlobUrl = null;
+  }
+}
 
 function emitDownloadProgress(ratio: number) {
   latestDownloadProgress = ratio;
@@ -167,13 +184,24 @@ export function getFFmpegMode(): "st" {
   return "st";
 }
 
-export function cancelFFmpegExport(): void {
+export function disposeFFmpeg(): void {
   if (ffmpegInstance) {
-    ffmpegInstance.terminate();
+    ffmpegInstance.terminate(false);
     ffmpegInstance = null;
   }
   loadPromise = null;
   latestDownloadProgress = 0;
+  revokeCoreBlobUrls();
+}
+
+export function cancelFFmpegExport(): void {
+  if (ffmpegInstance) {
+    ffmpegInstance.terminate(true);
+    ffmpegInstance = null;
+  }
+  loadPromise = null;
+  latestDownloadProgress = 0;
+  revokeCoreBlobUrls();
 }
 
 async function fetchAsBlobURLWithFallback(
@@ -255,6 +283,8 @@ async function initFFmpeg(
 
     await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
     onDownloadProgress?.(1);
+    activeCoreBlobUrl = coreBlobUrl;
+    activeWasmBlobUrl = wasmBlobUrl;
     ffmpegInstance = ffmpeg;
     return ffmpeg;
   } catch (err) {
@@ -366,6 +396,7 @@ export interface BurnSubtitlesParams {
   sourceHeight: number;
   quality: ExportQualityPreset;
   convertToVertical916?: boolean;
+  isMobile?: boolean;
   durationSec?: number;
   onStage?: (stage: "loading-ffmpeg" | "preparing" | "encoding") => void;
   onDownloadProgress?: (ratio: number) => void;
@@ -403,6 +434,7 @@ export async function burnSubtitlesWithFFmpeg({
   sourceHeight,
   quality,
   convertToVertical916 = false,
+  isMobile = false,
   durationSec,
   onStage,
   onDownloadProgress,
@@ -433,6 +465,9 @@ export async function burnSubtitlesWithFFmpeg({
   };
 
   try {
+    // Ensure Phase 1 Whisper worker + model tensors are completely released before loading FFmpeg.
+    await disposeWhisperWorker();
+
     onStage?.("loading-ffmpeg");
     ffmpeg = await getFFmpeg(onDownloadProgress);
 
@@ -469,15 +504,22 @@ export async function burnSubtitlesWithFFmpeg({
     await ffmpeg.writeFile(assName, new TextEncoder().encode(assContent));
 
     const qualityCfg = EXPORT_QUALITY_OPTIONS[quality];
+    const safe720p = shouldUseSafe720pExport(
+      sourceWidth,
+      sourceHeight,
+      isMobile
+    );
     const targetDims = computeTargetExportDimensions(
       sourceWidth,
       sourceHeight,
       quality,
-      convertToVertical916
+      convertToVertical916,
+      safe720p
     );
+    const preset = safe720p ? "ultrafast" : qualityCfg.preset;
 
-    // Scale/crop first (to exact even dimensions), then burn ASS at matching PlayResX/PlayResY
-    // so text remains crisp at any target resolution or 9:16 vertical crop.
+    // Scale/crop first (capped <= 720p on mobile or >720p input), then burn ASS at matching
+    // PlayResX/PlayResY so text stays sharp without OOM spikes on mobile browsers.
     const vfChain = convertToVertical916
       ? `scale=${targetDims.width}:${targetDims.height}:force_original_aspect_ratio=increase,crop=${targetDims.width}:${targetDims.height},ass=${assName}:fontsdir=/fonts`
       : targetDims.scaled
@@ -498,7 +540,9 @@ export async function burnSubtitlesWithFFmpeg({
       "-c:v",
       "libx264",
       "-preset",
-      qualityCfg.preset,
+      preset,
+      "-threads",
+      "1",
       "-crf",
       qualityCfg.crf,
       "-pix_fmt",
@@ -554,6 +598,10 @@ export async function burnSubtitlesWithFFmpeg({
       await ffmpeg.deleteFile(assName).catch(() => {});
       await ffmpeg.deleteFile(outputName).catch(() => {});
       await ffmpeg.deleteFile(fontVirtualPath).catch(() => {});
+    }
+    if (isMobile) {
+      // On mobile browsers, release FFmpeg WASM memory right after producing the output Blob.
+      disposeFFmpeg();
     }
   }
 }

@@ -8,12 +8,17 @@ import type { ModelProgressInfo, WhisperModelId } from "@/types/subtitle";
 env.allowLocalModels = false;
 env.useBrowserCache = true;
 
-interface TranscribeRequestMessage {
-  type: "transcribe";
-  requestId: string;
-  modelId: WhisperModelId;
-  audio: Float32Array;
-}
+type WorkerRequestMessage =
+  | {
+      type: "transcribe";
+      requestId: string;
+      modelId: WhisperModelId;
+      audio: Float32Array;
+    }
+  | {
+      type: "dispose";
+      requestId?: string;
+    };
 
 type ExecutionDevice = "webgpu" | "wasm";
 
@@ -47,6 +52,15 @@ function getDtypeForDevice(device: ExecutionDevice) {
     encoder_model: "q8" as const,
     decoder_model_merged: "q8" as const,
   };
+}
+
+async function disposeCachedPipeline(): Promise<void> {
+  if (cachedPipeline && typeof cachedPipeline.dispose === "function") {
+    await cachedPipeline.dispose().catch(() => {});
+  }
+  cachedPipeline = null;
+  cachedModelId = null;
+  cachedDevice = null;
 }
 
 async function getOrCreatePipeline(
@@ -137,9 +151,17 @@ async function runTranscription(
 
 self.addEventListener(
   "message",
-  async (event: MessageEvent<TranscribeRequestMessage>) => {
+  async (event: MessageEvent<WorkerRequestMessage>) => {
     const data = event.data;
-    if (!data || data.type !== "transcribe") return;
+    if (!data) return;
+
+    if (data.type === "dispose") {
+      await disposeCachedPipeline();
+      self.postMessage({ type: "disposed", requestId: data.requestId });
+      return;
+    }
+
+    if (data.type !== "transcribe") return;
 
     const { requestId, modelId, audio } = data;
     let device = await detectDevice();
@@ -162,7 +184,7 @@ self.addEventListener(
           type: "status",
           requestId,
           stage: "loading-model",
-          message: "WebGPU falló en este dispositivo; cambiando a modo CPU WASM...",
+          message: "Cambiando a modo estándar de compatibilidad...",
         });
         try {
           const fallbackResult = await runTranscription(
@@ -198,6 +220,10 @@ self.addEventListener(
         error:
           primaryErr instanceof Error ? primaryErr.message : String(primaryErr),
       });
+    } finally {
+      // Phase 1 cleanup: always free Transformers.js model & tensor buffers after transcription
+      // so mobile devices have headroom before FFmpeg.wasm allocates memory.
+      await disposeCachedPipeline();
     }
   }
 );

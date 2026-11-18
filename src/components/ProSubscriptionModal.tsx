@@ -334,7 +334,7 @@ export function ProSubscriptionModal({
                 </span>
               </div>
               <p className="mt-1.5 text-xs text-zinc-400">
-                Para probar FreeClips y crear clips cortos sin registro.
+                Para probar FreeClips y crear clips cortos gratis cada día.
               </p>
 
               <ul className="mt-4 space-y-2 text-xs text-zinc-300">
