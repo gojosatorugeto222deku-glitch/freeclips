@@ -315,6 +315,8 @@ export function loadDiscountState(): ProDiscountState {
       googleDisplayName: parsed.googleDisplayName,
       googlePhotoUrl: parsed.googlePhotoUrl,
       socialShared: Boolean(parsed.socialShared),
+      stripeCustomerEmail: parsed.stripeCustomerEmail,
+      stripeSubscriptionId: parsed.stripeSubscriptionId,
     };
   } catch {
     return createDefaultDiscountState();

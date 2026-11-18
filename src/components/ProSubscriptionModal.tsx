@@ -20,8 +20,9 @@ import {
   signInWithGooglePopup,
   signOutFirebase,
 } from "@/lib/firebaseClient";
-import { resolveStripeCheckoutLink, type CheckoutTier } from "@/lib/stripeLinks";
+import { resolveStripeCheckoutLink } from "@/lib/stripeLinks";
 import {
+  hasCreatorAccess,
   isViralDiscountUnlocked,
   SOCIAL_VERIFY_SECONDS,
 } from "@/lib/usageLimits";
@@ -47,10 +48,20 @@ export function ProSubscriptionModal({
   const [shareVerifyingLeft, setShareVerifyingLeft] = useState<number | null>(
     null
   );
+  const [checkoutLoadingTier, setCheckoutLoadingTier] = useState<
+    "5usd" | "3usd" | null
+  >(null);
   const [checkoutNotice, setCheckoutNotice] = useState<string | null>(null);
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoreEmail, setRestoreEmail] = useState(
+    discountState.stripeCustomerEmail || discountState.googleEmail || ""
+  );
+  const [restoreLoading, setRestoreLoading] = useState(false);
+  const [restoreSuccess, setRestoreSuccess] = useState<string | null>(null);
 
   const firebaseReady = isFirebaseConfigured();
   const discountUnlocked = isViralDiscountUnlocked(discountState);
+  const isAlreadyCreator = hasCreatorAccess(discountState.planTier);
   const isVerifyingShare = shareVerifyingLeft !== null;
 
   useEffect(() => {
@@ -92,7 +103,7 @@ export function ProSubscriptionModal({
 
     if (!firebaseReady) {
       setAuthError(
-        "Faltan las variables NEXT_PUBLIC_FIREBASE_* en .env.local para usar Firebase Auth real."
+        "El acceso con Google está terminando de activarse. Puedes usar 'Simular conexión demo' mientras se habilita."
       );
       return;
     }
@@ -173,19 +184,100 @@ export function ProSubscriptionModal({
     }
   };
 
-  const handleStripeCheckout = (tier: CheckoutTier) => {
+  const handleStripeCheckout = async (tier: "5usd" | "3usd") => {
     setCheckoutNotice(null);
+    setRestoreSuccess(null);
+
     const resolved = resolveStripeCheckoutLink(
       tier,
       discountState.googleEmail
     );
-    if (!resolved.configured || !resolved.url) {
-      setCheckoutNotice(
-        `Enlace de pago no configurado aún. Agrega ${resolved.envVarName} en tu archivo .env.local con tu enlace de Stripe Checkout o Mercado Pago.`
-      );
+    if (resolved.configured && resolved.url) {
+      window.open(resolved.url, "_blank", "noopener,noreferrer");
       return;
     }
-    window.open(resolved.url, "_blank", "noopener,noreferrer");
+
+    setCheckoutLoadingTier(tier);
+    try {
+      const response = await fetch("/api/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tier,
+          email: discountState.googleEmail,
+        }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+      if (response.ok && data.url) {
+        window.location.assign(data.url);
+        return;
+      }
+      setCheckoutNotice(
+        data.error ||
+          "La pasarela de Stripe aún está completando su activación. Si ya realizaste un pago, puedes validarlo abajo con tu correo."
+      );
+    } catch {
+      setCheckoutNotice(
+        "No se pudo conectar con la pasarela de pago. Intenta de nuevo en unos segundos."
+      );
+    } finally {
+      setCheckoutLoadingTier(null);
+    }
+  };
+
+  const handleRestoreSubscription = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCheckoutNotice(null);
+    setRestoreSuccess(null);
+
+    const emailToCheck = (
+      restoreEmail ||
+      discountState.googleEmail ||
+      ""
+    ).trim();
+    if (!emailToCheck) {
+      setCheckoutNotice("Ingresa el correo con el que pagaste en Stripe.");
+      return;
+    }
+
+    setRestoreLoading(true);
+    try {
+      const response = await fetch("/api/stripe/restore", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailToCheck }),
+      });
+      const data = (await response.json().catch(() => ({}))) as {
+        active?: boolean;
+        customerEmail?: string;
+        subscriptionId?: string;
+        error?: string;
+      };
+
+      if (!response.ok || !data.active) {
+        setCheckoutNotice(
+          data.error || "No encontramos una suscripción activa para ese correo."
+        );
+        return;
+      }
+
+      onUpdateDiscountState({
+        ...discountState,
+        planTier: "creator",
+        stripeCustomerEmail: data.customerEmail || emailToCheck,
+        stripeSubscriptionId: data.subscriptionId,
+      });
+      setRestoreSuccess("¡Listo! Plan Creador verificado y activado.");
+    } catch {
+      setCheckoutNotice(
+        "No se pudo verificar tu suscripción en este momento."
+      );
+    } finally {
+      setRestoreLoading(false);
+    }
   };
 
   const completedSteps =
@@ -488,37 +580,105 @@ export function ProSubscriptionModal({
             </div>
 
             <div className="mt-4 space-y-2">
-              <button
-                type="button"
-                disabled={!discountUnlocked}
-                onClick={() => handleStripeCheckout("3usd")}
-                className="flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-yellow-500/20 transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none"
-              >
-                {discountUnlocked ? (
-                  <>
-                    <Sparkles className="h-4 w-4" />
-                    <span>Pagar Creador · $3 USD/mes</span>
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </>
-                ) : (
-                  <>
-                    <Lock className="h-3.5 w-3.5" />
-                    <span>Completa 2 pasos para $3 USD</span>
-                  </>
-                )}
-              </button>
+              {isAlreadyCreator ? (
+                <div className="rounded-xl border border-emerald-400/35 bg-emerald-400/10 px-4 py-3 text-center text-xs font-semibold text-emerald-200">
+                  Plan Creador activo
+                  {discountState.stripeCustomerEmail
+                    ? ` · ${discountState.stripeCustomerEmail}`
+                    : ""}
+                </div>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={!discountUnlocked || checkoutLoadingTier !== null}
+                    onClick={() => handleStripeCheckout("3usd")}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-yellow-400 px-4 py-2.5 text-sm font-bold text-black shadow-lg shadow-yellow-500/20 transition hover:bg-yellow-300 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500 disabled:shadow-none"
+                  >
+                    {checkoutLoadingTier === "3usd" ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Abriendo pago seguro...</span>
+                      </>
+                    ) : discountUnlocked ? (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        <span>Pagar Creador · $3 USD/mes</span>
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-3.5 w-3.5" />
+                        <span>Completa 2 pasos para $3 USD</span>
+                      </>
+                    )}
+                  </button>
 
-              <button
-                type="button"
-                onClick={() => handleStripeCheckout("5usd")}
-                className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/[0.12]"
-              >
-                <span>Suscribirse sin pasos · $5 USD/mes</span>
-                <ExternalLink className="h-3 w-3" />
-              </button>
+                  <button
+                    type="button"
+                    disabled={checkoutLoadingTier !== null}
+                    onClick={() => handleStripeCheckout("5usd")}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.05] px-4 py-2 text-xs font-semibold text-zinc-200 transition hover:bg-white/[0.12] disabled:opacity-60"
+                  >
+                    {checkoutLoadingTier === "5usd" ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <span>Abriendo pago seguro...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>Suscribirse sin pasos · $5 USD/mes</span>
+                        <ExternalLink className="h-3 w-3" />
+                      </>
+                    )}
+                  </button>
+                </>
+              )}
+
+              <div className="pt-1 text-center">
+                <button
+                  type="button"
+                  onClick={() => setRestoreOpen((prev) => !prev)}
+                  className="text-[11px] text-zinc-400 underline hover:text-zinc-200"
+                >
+                  ¿Ya pagaste? Activar o restaurar Plan Creador
+                </button>
+              </div>
+
+              {restoreOpen && (
+                <form
+                  onSubmit={handleRestoreSubscription}
+                  className="flex flex-col gap-2 rounded-xl border border-white/10 bg-black/40 p-2.5 sm:flex-row"
+                >
+                  <input
+                    type="email"
+                    value={restoreEmail}
+                    onChange={(e) => setRestoreEmail(e.target.value)}
+                    placeholder="tu-correo@ejemplo.com"
+                    className="min-w-0 flex-1 rounded-lg border border-white/15 bg-[#0f1117] px-2.5 py-1.5 text-xs text-white placeholder:text-zinc-500 focus:border-yellow-400/60 focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={restoreLoading}
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-emerald-400 px-3 py-1.5 text-xs font-semibold text-black transition hover:bg-emerald-300 disabled:opacity-60"
+                  >
+                    {restoreLoading && (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    )}
+                    <span>Verificar</span>
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
+
+        {restoreSuccess && (
+          <div className="mt-4 flex min-w-0 items-center gap-2 rounded-xl border border-emerald-400/35 bg-emerald-400/10 px-3.5 py-2.5 text-xs text-emerald-200">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+            <span>{restoreSuccess}</span>
+          </div>
+        )}
 
         {checkoutNotice && (
           <div className="mt-4 flex min-w-0 items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-400/10 px-3.5 py-2.5 text-xs text-amber-100">

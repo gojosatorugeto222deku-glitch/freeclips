@@ -8,7 +8,16 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { Crown, Download, Lock, Palette, Subtitles } from "lucide-react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  Crown,
+  Download,
+  Lock,
+  Palette,
+  Subtitles,
+  X,
+} from "lucide-react";
 import { AdUnlockModal } from "@/components/AdUnlockModal";
 import { ExportPanel } from "@/components/ExportPanel";
 import { Header } from "@/components/Header";
@@ -54,6 +63,7 @@ import {
   getUsageSnapshot,
   hasCreatorAccess,
   isVideoDurationBlocked,
+  loadDiscountState,
   loadUsageState,
   PLAN_CONFIGS,
   saveDiscountState,
@@ -98,6 +108,10 @@ export function SubLimpioStudio() {
   const [adModalOpen, setAdModalOpen] = useState(false);
   const [proModalOpen, setProModalOpen] = useState(false);
   const [proModalReason, setProModalReason] = useState<string | null>(null);
+  const [checkoutBanner, setCheckoutBanner] = useState<{
+    type: "success" | "info" | "error";
+    text: string;
+  } | null>(null);
 
   const [activeTab, setActiveTab] = useState<StudioTab>("subtitles");
   const [currentTime, setCurrentTime] = useState(0);
@@ -168,6 +182,78 @@ export function SubLimpioStudio() {
       return () => window.clearInterval(id);
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("checkout_session_id")?.trim() || "";
+    const canceled = params.get("checkout_canceled") === "1";
+
+    if (!sessionId && !canceled) return;
+
+    window.history.replaceState({}, "", window.location.pathname);
+
+    if (canceled) {
+      Promise.resolve().then(() => {
+        setCheckoutBanner({
+          type: "info",
+          text: "El pago fue cancelado. Puedes seguir usando FreeClips gratis o intentarlo cuando quieras.",
+        });
+      });
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/stripe/verify-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId }),
+        });
+        const data = (await res.json().catch(() => ({}))) as {
+          verified?: boolean;
+          customerEmail?: string;
+          subscriptionId?: string;
+          error?: string;
+        };
+        if (cancelled) return;
+        if (res.ok && data.verified) {
+          const current = loadDiscountState();
+          saveDiscountState({
+            ...current,
+            planTier: "creator",
+            stripeCustomerEmail:
+              data.customerEmail || current.stripeCustomerEmail,
+            stripeSubscriptionId:
+              data.subscriptionId || current.stripeSubscriptionId,
+          });
+          setCheckoutBanner({
+            type: "success",
+            text: "¡Pago verificado! Plan Creador activado (20 videos/día, hasta 15 min, Editor Pro y Vertical 9:16).",
+          });
+        } else {
+          setCheckoutBanner({
+            type: "error",
+            text:
+              data.error ||
+              "No pudimos confirmar el pago en Stripe todavía. Si ya te cobraron, usa 'Restaurar Plan Creador' con tu correo.",
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setCheckoutBanner({
+            type: "error",
+            text: "Error de red al verificar tu pago. Abre Planes Pro → '¿Ya pagaste? Activar o restaurar Plan Creador'.",
+          });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const planTier = discountState.planTier;
   const hasCreator = hasCreatorAccess(planTier);
@@ -582,6 +668,34 @@ export function SubLimpioStudio() {
       />
 
       <main className="mx-auto flex w-full max-w-[1440px] flex-1 flex-col px-4 py-5 sm:px-6">
+        {checkoutBanner && (
+          <div
+            className={`mb-4 flex items-center justify-between gap-3 rounded-xl border px-4 py-3 text-xs ${
+              checkoutBanner.type === "success"
+                ? "border-emerald-400/40 bg-emerald-400/12 text-emerald-100"
+                : checkoutBanner.type === "error"
+                  ? "border-amber-400/40 bg-amber-400/12 text-amber-100"
+                  : "border-white/15 bg-white/[0.05] text-zinc-200"
+            }`}
+          >
+            <div className="flex items-center gap-2.5">
+              {checkoutBanner.type === "success" ? (
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              ) : (
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+              )}
+              <span>{checkoutBanner.text}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCheckoutBanner(null)}
+              aria-label="Cerrar aviso de pago"
+              className="rounded p-1 text-zinc-400 hover:bg-white/10 hover:text-white"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
         {!videoUrl || !videoMeta ? (
           <UploadDropzone
             onFileSelected={loadSelectedVideo}

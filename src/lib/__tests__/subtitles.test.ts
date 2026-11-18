@@ -11,6 +11,11 @@ import {
 } from "@/lib/exportUtils";
 import { parseFontMetadataFromBytes } from "@/lib/fontParser";
 import { resolveStripeCheckoutLink } from "@/lib/stripeLinks";
+import {
+  isCreatorSessionPaid,
+  isValidEmail,
+  isValidStripeSessionId,
+} from "@/lib/stripeServer";
 import { DEFAULT_SUBTITLE_SETTINGS } from "@/lib/styles";
 import {
   claimExtraVideoPack,
@@ -416,5 +421,46 @@ describe("assGenerator Pro overrides", () => {
     });
     expect(ass).toContain("Space Grotesk");
     expect(ass).toContain("&HAAFF00&");
+  });
+});
+
+describe("stripeServer helpers", () => {
+  it("validates checkout session IDs and emails safely", () => {
+    expect(isValidStripeSessionId("cs_live_a1B2c3D4e5F6g7H8")).toBe(true);
+    expect(isValidStripeSessionId("cs_test_1234567890abcdef")).toBe(true);
+    expect(isValidStripeSessionId("invalid_session")).toBe(false);
+    expect(isValidStripeSessionId("cs_live_short")).toBe(false);
+
+    expect(isValidEmail("creador@freeclips.dev")).toBe(true);
+    expect(isValidEmail("not-an-email")).toBe(false);
+  });
+
+  it("verifies completed paid FreeClips sessions and rejects unpaid or foreign sessions", () => {
+    expect(
+      isCreatorSessionPaid({
+        id: "cs_live_1234567890ab",
+        status: "complete",
+        payment_status: "paid",
+        metadata: { app: "freeclips", plan_tier: "creator" },
+      })
+    ).toBe(true);
+
+    expect(
+      isCreatorSessionPaid({
+        id: "cs_live_1234567890ab",
+        status: "open",
+        payment_status: "unpaid",
+        metadata: { app: "freeclips" },
+      })
+    ).toBe(false);
+
+    expect(
+      isCreatorSessionPaid({
+        id: "cs_live_1234567890ab",
+        status: "complete",
+        payment_status: "paid",
+        metadata: { app: "other_unrelated_app" },
+      })
+    ).toBe(false);
   });
 });

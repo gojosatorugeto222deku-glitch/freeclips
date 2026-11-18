@@ -109,6 +109,8 @@ export interface ProDiscountState {
   googleDisplayName?: string;
   googlePhotoUrl?: string;
   socialShared: boolean;
+  stripeCustomerEmail?: string;
+  stripeSubscriptionId?: string;
   /** @deprecated kept for backwards compatibility with older localStorage payloads */
   isPro?: boolean;
 }
