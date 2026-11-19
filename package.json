@@ -9,8 +9,9 @@
     "lint": "eslint",
     "test": "vitest run",
     "sync:ffmpeg": "node scripts/copy-ffmpeg-core.mjs",
+    "sync:model": "node scripts/sync-whisper-tiny.mjs",
     "copy:clean": "node scripts/copiar-limpio.mjs",
-    "postinstall": "node scripts/copy-ffmpeg-core.mjs"
+    "postinstall": "node scripts/copy-ffmpeg-core.mjs && node scripts/sync-whisper-tiny.mjs"
   },
   "dependencies": {
     "@ffmpeg/core": "^0.12.10",

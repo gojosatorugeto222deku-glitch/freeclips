@@ -48,6 +48,39 @@ function TierLockBadge({ label = "CREADOR" }: { label?: string }) {
   );
 }
 
+function ToggleSwitch({
+  checked,
+  onChange,
+  ariaLabel,
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={ariaLabel}
+      onClick={() => onChange(!checked)}
+      className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition ${
+        checked
+          ? "border-yellow-400/70 bg-yellow-400"
+          : "border-white/15 bg-white/10"
+      }`}
+    >
+      <span
+        className={`inline-block h-3.5 w-3.5 rounded-full transition-transform ${
+          checked
+            ? "translate-x-[18px] bg-black"
+            : "translate-x-[2px] bg-zinc-300"
+        }`}
+      />
+    </button>
+  );
+}
+
 export function StylePicker({
   settings,
   planTier,
@@ -72,7 +105,7 @@ export function StylePicker({
   const handleFontClick = (fontId: SubtitleFontId) => {
     if (!hasCreator) {
       onRequirePro(
-        "Personalizar la tipografía está incluido en el Editor Visual Pro (Plan Creador y Agencia)."
+        "Personalizar la tipografía está incluido en el Editor Visual Pro (Plan Creador)."
       );
       return;
     }
@@ -111,17 +144,19 @@ export function StylePicker({
   );
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* 3 Core Visual Styles (Free) */}
       <div>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-white">
+          <h3 className="text-sm font-bold text-white">
             Estilo visual de subtítulos
           </h3>
-          <span className="text-xs text-zinc-400">3 estilos incluidos</span>
+          <span className="rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-300">
+            3 estilos gratis
+          </span>
         </div>
 
-        <div className="grid grid-cols-1 gap-3">
+        <div className="grid grid-cols-1 gap-2.5">
           {STYLE_ORDER.map((styleId) => {
             const preset = SUBTITLE_STYLES[styleId];
             const selected = settings.styleId === styleId;
@@ -141,15 +176,15 @@ export function StylePicker({
                     customOutlineColorHex: undefined,
                   })
                 }
-                className={`group relative flex flex-col gap-2.5 rounded-xl border p-3.5 text-left transition ${
+                className={`group relative flex flex-col gap-2.5 rounded-2xl border p-3.5 text-left transition ${
                   selected
-                    ? "border-yellow-400 bg-yellow-400/[0.07] ring-1 ring-yellow-400/40"
-                    : "border-white/[0.08] bg-[#141720] hover:border-white/20 hover:bg-[#191d28]"
+                    ? "border-yellow-400/80 bg-yellow-400/[0.08] ring-1 ring-yellow-400/35"
+                    : "border-white/[0.08] bg-[#121621] hover:border-white/20 hover:bg-[#171c2a]"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-white">
+                    <p className="text-sm font-bold text-white">
                       {preset.name}
                     </p>
                     <p className="mt-0.5 text-xs text-zinc-400">
@@ -169,7 +204,7 @@ export function StylePicker({
 
                 {/* Live Mini Preview Strip */}
                 <div
-                  className={`flex h-12 items-center justify-center rounded-lg border px-3 ${preset.previewBgClass}`}
+                  className={`flex h-12 items-center justify-center rounded-xl border px-3 ${preset.previewBgClass}`}
                 >
                   {styleId === "tiktok" && (
                     <span
@@ -225,9 +260,9 @@ export function StylePicker({
       </div>
 
       {/* Free Layout Basics */}
-      <div className="space-y-4 rounded-xl border border-white/[0.08] bg-[#12151d] p-4">
+      <div className="studio-surface-subtle space-y-4 rounded-2xl border border-white/[0.08] p-4">
         <div>
-          <label className="mb-2 block text-xs font-medium text-zinc-300">
+          <label className="mb-2 block text-xs font-semibold text-zinc-300">
             Tamaño de letra
           </label>
           <div className="grid grid-cols-3 gap-2">
@@ -236,10 +271,10 @@ export function StylePicker({
                 key={sz}
                 type="button"
                 onClick={() => onChange({ ...settings, size: sz })}
-                className={`rounded-lg border px-3 py-2 text-xs font-medium transition ${
+                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
                   settings.size === sz
-                    ? "border-yellow-400 bg-yellow-400/15 text-yellow-200"
-                    : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
+                    ? "border-yellow-400/80 bg-yellow-400/15 text-yellow-200"
+                    : "border-white/10 bg-black/25 text-zinc-300 hover:bg-white/[0.07]"
                 }`}
               >
                 {SIZE_LABELS[sz]}
@@ -250,10 +285,10 @@ export function StylePicker({
 
         <div>
           <div className="mb-2 flex items-center justify-between text-xs">
-            <label htmlFor="words-per-cue" className="font-medium text-zinc-300">
+            <label htmlFor="words-per-cue" className="font-semibold text-zinc-300">
               Palabras por frase
             </label>
-            <span className="font-mono text-yellow-300">
+            <span className="rounded-md bg-yellow-400/12 px-2 py-0.5 font-mono text-[11px] font-semibold text-yellow-300">
               {settings.maxWordsPerCue} palabras
             </span>
           </div>
@@ -275,44 +310,40 @@ export function StylePicker({
           )}
         </div>
 
-        <div className="space-y-2.5 border-t border-white/[0.07] pt-3">
-          <label className="flex cursor-pointer items-center justify-between gap-3">
+        <div className="space-y-3 border-t border-white/[0.07] pt-3.5">
+          <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-medium text-zinc-200">
               Mostrar todo en MAYÚSCULAS
             </span>
-            <input
-              type="checkbox"
+            <ToggleSwitch
               checked={settings.uppercase}
-              onChange={(e) =>
-                onChange({ ...settings, uppercase: e.target.checked })
-              }
-              className="h-4 w-4 rounded border-white/20 bg-zinc-900 accent-yellow-400"
+              onChange={(checked) => onChange({ ...settings, uppercase: checked })}
+              ariaLabel="Mostrar todo en mayúsculas"
             />
-          </label>
+          </div>
 
-          <label className="flex cursor-pointer items-center justify-between gap-3">
+          <div className="flex items-center justify-between gap-3">
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-200">
               <Sparkles className="h-3.5 w-3.5 text-yellow-400" />
               Resaltar palabra activa al hablar
             </span>
-            <input
-              type="checkbox"
+            <ToggleSwitch
               checked={settings.highlightActiveWord}
-              onChange={(e) =>
-                onChange({ ...settings, highlightActiveWord: e.target.checked })
+              onChange={(checked) =>
+                onChange({ ...settings, highlightActiveWord: checked })
               }
-              className="h-4 w-4 rounded border-white/20 bg-zinc-900 accent-yellow-400"
+              ariaLabel="Resaltar palabra activa al hablar"
             />
-          </label>
+          </div>
         </div>
       </div>
 
-      {/* Editor Visual Pro (Plan Creador + Agencia) */}
-      <div className="space-y-4 rounded-xl border border-yellow-400/25 bg-gradient-to-b from-yellow-400/[0.05] to-[#12151d] p-4">
+      {/* Editor Visual Pro (Plan Creador) */}
+      <div className="space-y-4 rounded-2xl border border-yellow-400/25 bg-gradient-to-b from-yellow-400/[0.06] to-[#11151f] p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Crown className="h-4 w-4 text-yellow-400" />
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-yellow-200">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-yellow-200">
               Editor Visual Pro
             </h4>
           </div>
@@ -324,7 +355,7 @@ export function StylePicker({
                   "Desbloquea el Editor Visual Pro y conversión 9:16 desde el Plan Creador ($3 USD con descuento viral)."
                 )
               }
-              className="inline-flex items-center gap-1 rounded-full border border-yellow-400/40 bg-yellow-400/15 px-2.5 py-0.5 text-[10px] font-semibold text-yellow-200 transition hover:bg-yellow-400/25"
+              className="inline-flex items-center gap-1 rounded-full border border-yellow-400/40 bg-yellow-400/15 px-2.5 py-0.5 text-[10px] font-bold text-yellow-200 transition hover:bg-yellow-400/25"
             >
               <Lock className="h-2.5 w-2.5" />
               Desbloquear
@@ -353,26 +384,24 @@ export function StylePicker({
           )}
         </div>
 
-        {/* 9:16 Vertical Conversion (Plan Creador+) */}
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-white/[0.08] bg-black/30 px-3 py-2.5">
-          <div className="flex items-center gap-2">
+        {/* 9:16 Vertical Conversion (Plan Creador) */}
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-black/35 px-3 py-2.5">
+          <div className="flex items-center gap-2.5">
             <Smartphone className="h-4 w-4 text-yellow-400" />
             <div>
-              <p className="text-xs font-medium text-zinc-200">
+              <p className="text-xs font-semibold text-zinc-200">
                 Convertir a Vertical 9:16
               </p>
-              <p className="text-[10px] text-zinc-400">
+              <p className="text-[10.5px] text-zinc-400">
                 Adapta videos horizontales para TikTok y Reels
               </p>
             </div>
           </div>
           {hasCreator ? (
-            <input
-              type="checkbox"
-              aria-label="Convertir a Vertical 9:16"
+            <ToggleSwitch
               checked={Boolean(settings.convertToVertical916)}
-              onChange={(e) => handleVerticalToggle(e.target.checked)}
-              className="h-4 w-4 rounded border-white/20 bg-zinc-900 accent-yellow-400"
+              onChange={handleVerticalToggle}
+              ariaLabel="Convertir a Vertical 9:16"
             />
           ) : (
             <button
@@ -389,7 +418,7 @@ export function StylePicker({
         {/* Position Control */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="text-xs font-medium text-zinc-300">
+            <label className="text-xs font-semibold text-zinc-300">
               Posición en pantalla
             </label>
             {!hasCreator && <TierLockBadge label="CREADOR" />}
@@ -403,9 +432,9 @@ export function StylePicker({
                   key={pos}
                   type="button"
                   onClick={() => handlePositionClick(pos)}
-                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-2 text-xs font-medium transition ${
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-2.5 py-2 text-xs font-semibold transition ${
                     active
-                      ? "border-yellow-400 bg-yellow-400/15 text-yellow-200"
+                      ? "border-yellow-400/80 bg-yellow-400/15 text-yellow-200"
                       : locked
                         ? "border-white/[0.08] bg-black/30 text-zinc-400 hover:border-yellow-400/40 hover:text-yellow-200"
                         : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
@@ -422,7 +451,7 @@ export function StylePicker({
         {/* Font Selector */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="text-xs font-medium text-zinc-300">
+            <label className="text-xs font-semibold text-zinc-300">
               Tipografía personalizada
             </label>
             {!hasCreator && <TierLockBadge label="CREADOR" />}
@@ -436,9 +465,9 @@ export function StylePicker({
                   key={fontId}
                   type="button"
                   onClick={() => handleFontClick(fontId)}
-                  className={`relative flex items-center justify-center gap-1 rounded-lg border px-2 py-2 text-[11px] font-medium transition ${
+                  className={`relative flex items-center justify-center gap-1 rounded-xl border px-2 py-2 text-[11px] font-medium transition ${
                     active
-                      ? "border-yellow-400 bg-yellow-400/15 text-yellow-200"
+                      ? "border-yellow-400/80 bg-yellow-400/15 text-yellow-200"
                       : !hasCreator
                         ? "border-white/[0.08] bg-black/30 text-zinc-400 hover:border-yellow-400/40 hover:text-yellow-200"
                         : "border-white/10 bg-white/[0.03] text-zinc-300 hover:bg-white/[0.07]"
@@ -458,7 +487,7 @@ export function StylePicker({
         {/* Color Pickers */}
         <div>
           <div className="mb-2 flex items-center justify-between">
-            <label className="text-xs font-medium text-zinc-300">
+            <label className="text-xs font-semibold text-zinc-300">
               Colores personalizados
             </label>
             {!hasCreator && <TierLockBadge label="CREADOR" />}
@@ -487,7 +516,7 @@ export function StylePicker({
               hasCreator ? (
                 <label
                   key={item.key}
-                  className="flex cursor-pointer flex-col items-center gap-1.5 rounded-lg border border-white/10 bg-black/30 p-2 text-center hover:border-white/25"
+                  className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border border-white/10 bg-black/35 p-2 text-center hover:border-white/25"
                 >
                   <input
                     type="color"
@@ -505,10 +534,10 @@ export function StylePicker({
                   type="button"
                   onClick={() =>
                     onRequirePro(
-                      "Personalizar colores de texto, palabra activa y contorno requiere Plan Creador o Agencia."
+                      "Personalizar colores de texto, palabra activa y contorno requiere Plan Creador."
                     )
                   }
-                  className="flex flex-col items-center gap-1.5 rounded-lg border border-white/[0.08] bg-black/30 p-2 text-center transition hover:border-yellow-400/40"
+                  className="flex flex-col items-center gap-1.5 rounded-xl border border-white/[0.08] bg-black/35 p-2 text-center transition hover:border-yellow-400/40"
                 >
                   <div className="flex items-center gap-1.5">
                     <span

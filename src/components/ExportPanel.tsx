@@ -186,11 +186,13 @@ export function ExportPanel({
   return (
     <div className="space-y-4">
       {/* Export Summary & Quality Selector */}
-      <div className="rounded-xl border border-white/[0.08] bg-[#12151d] p-4">
+      <div className="studio-surface-subtle rounded-2xl border border-white/[0.08] p-4">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
-              <Film className="h-4 w-4 text-yellow-400" />
+            <h3 className="flex items-center gap-2 text-sm font-bold text-white">
+              <span className="flex h-6 w-6 items-center justify-center rounded-lg border border-yellow-400/30 bg-yellow-400/12 text-yellow-300">
+                <Film className="h-3.5 w-3.5" />
+              </span>
               Exportar MP4 con subtítulos quemados
             </h3>
             <p className="mt-1 text-xs text-zinc-400">
@@ -199,7 +201,7 @@ export function ExportPanel({
             </p>
           </div>
           <span
-            className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${
+            className={`shrink-0 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold ${
               isFfmpegWarm
                 ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
                 : "border-white/10 bg-white/[0.04] text-zinc-400"
@@ -306,10 +308,10 @@ export function ExportPanel({
                 : onStartExport
             }
             disabled={isBusy || (!isDurationBlocked && cueCount === 0)}
-            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${
+            className={`flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-bold shadow-lg transition disabled:cursor-not-allowed disabled:opacity-50 ${
               isDurationBlocked
                 ? "border border-yellow-400/45 bg-yellow-400/15 text-yellow-200 hover:bg-yellow-400/25"
-                : "bg-yellow-400 text-black shadow-yellow-500/15 hover:bg-yellow-300"
+                : "bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 text-black shadow-yellow-500/20 hover:brightness-105"
             }`}
           >
             {isBusy ? (

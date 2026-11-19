@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ShieldCheck } from "lucide-react";
 import { BrandLogo } from "@/components/BrandLogo";
 
 interface SiteFooterProps {
@@ -9,16 +10,26 @@ interface SiteFooterProps {
 
 export function SiteFooter({ onOpenProModal }: SiteFooterProps) {
   return (
-    <footer className="border-t border-white/[0.06] bg-[#07080b]/90 py-6 text-xs text-zinc-400">
-      <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-4 px-4 sm:flex-row sm:px-6">
-        <div className="flex items-center gap-2.5">
-          <BrandLogo size={24} />
-          <Link href="/" className="font-semibold text-zinc-200 hover:text-white">
-            FreeClips
-          </Link>
-          <span className="text-zinc-600">·</span>
-          <span className="text-zinc-500">
-            Subtítulos automáticos sin marca de agua
+    <footer className="relative border-t border-white/[0.07] bg-[#050609]/95 py-8 text-xs text-zinc-400">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent"
+      />
+      <div className="mx-auto flex max-w-[1440px] flex-col items-center justify-between gap-5 px-4 sm:flex-row sm:px-6">
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-3">
+          <div className="flex items-center gap-2.5">
+            <BrandLogo size={26} />
+            <Link
+              href="/"
+              className="text-sm font-bold tracking-tight text-white hover:text-yellow-300 transition"
+            >
+              FreeClips
+            </Link>
+          </div>
+          <span className="hidden text-zinc-700 sm:inline">·</span>
+          <span className="inline-flex items-center gap-1.5 text-zinc-400">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
+            Procesamiento privado en tu navegador · Sin marca de agua
           </span>
         </div>
 
@@ -30,12 +41,12 @@ export function SiteFooter({ onOpenProModal }: SiteFooterProps) {
             <button
               type="button"
               onClick={onOpenProModal}
-              className="transition hover:text-white"
+              className="transition hover:text-yellow-300"
             >
               Planes Pro
             </button>
           ) : (
-            <Link href="/#planes" className="transition hover:text-white">
+            <Link href="/#planes" className="transition hover:text-yellow-300">
               Planes Pro
             </Link>
           )}

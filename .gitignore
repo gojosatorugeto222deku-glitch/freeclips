@@ -33,5 +33,7 @@ firebase-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# copied ffmpeg core binaries (generated from node_modules)
+# copied ffmpeg, onnx runtime, & self-hosted tiny model binaries
 /public/ffmpeg/
+/public/ort/
+/public/models/

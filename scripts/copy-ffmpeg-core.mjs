@@ -16,6 +16,16 @@ const targets = [
     destDir: join(rootDir, "public/ffmpeg/st"),
     files: ["ffmpeg-core.js", "ffmpeg-core.wasm"],
   },
+  {
+    srcDir: join(rootDir, "node_modules/onnxruntime-web/dist"),
+    destDir: join(rootDir, "public/ort"),
+    files: [
+      "ort-wasm-simd-threaded.mjs",
+      "ort-wasm-simd-threaded.wasm",
+      "ort-wasm-simd-threaded.asyncify.mjs",
+      "ort-wasm-simd-threaded.asyncify.wasm",
+    ],
+  },
 ];
 
 for (const group of targets) {

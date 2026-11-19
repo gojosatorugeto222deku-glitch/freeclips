@@ -5,7 +5,15 @@ import nextTs from "eslint-config-next/typescript";
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "public/ffmpeg/**"]),
+  globalIgnores([
+    ".next/**",
+    "out/**",
+    "build/**",
+    "next-env.d.ts",
+    "public/ffmpeg/**",
+    "public/ort/**",
+    "public/models/**",
+  ]),
 ]);
 
 export default eslintConfig;

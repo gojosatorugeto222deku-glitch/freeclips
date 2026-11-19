@@ -4,6 +4,19 @@ import {
 } from "@/lib/ffmpegClient";
 
 const TARGET_SAMPLE_RATE = 16000;
+const WEB_AUDIO_TIMEOUT_MS = 20_000;
+
+interface ExtractAudioOptions {
+  signal?: AbortSignal;
+  onFallbackToFFmpeg?: () => void;
+  onFfmpegDownloadProgress?: (ratio: number) => void;
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new Error("Transcripción cancelada.");
+  }
+}
 
 /**
  * Decodes and resamples a video file's audio track to 16kHz mono Float32Array PCM.
@@ -12,20 +25,30 @@ const TARGET_SAMPLE_RATE = 16000;
  */
 export async function extractAudio16kMono(
   file: File,
-  onFallbackToFFmpeg?: () => void
+  options: ExtractAudioOptions = {}
 ): Promise<Float32Array> {
+  const { signal, onFallbackToFFmpeg, onFfmpegDownloadProgress } = options;
+  throwIfAborted(signal);
+
   try {
-    const pcm = await decodeWithWebAudio(file);
+    const pcm = await decodeWithWebAudio(file, signal);
+    throwIfAborted(signal);
     if (pcm.length > 0) {
       return pcm;
     }
-  } catch {
+  } catch (err) {
+    throwIfAborted(signal);
+    if (err instanceof Error && err.message.includes("cancelada")) {
+      throw err;
+    }
     // Container/codec not decodable by browser AudioContext (common for some MOV files).
   }
 
+  throwIfAborted(signal);
   onFallbackToFFmpeg?.();
   try {
-    const pcm = await extractAudioPcmWithFFmpeg(file);
+    const pcm = await extractAudioPcmWithFFmpeg(file, onFfmpegDownloadProgress);
+    throwIfAborted(signal);
     if (pcm.length === 0) {
       throw new Error(
         "No se detectó ninguna pista de audio en este video. Asegúrate de que el archivo tenga sonido."
@@ -33,12 +56,15 @@ export async function extractAudio16kMono(
     }
     return pcm;
   } finally {
-    // Release FFmpeg WASM heap immediately before Phase 1 Whisper allocates its model/tensors.
+    // Release FFmpeg WASM heap immediately before Phase 1 AI allocates its model/tensors.
     disposeFFmpeg();
   }
 }
 
-async function decodeWithWebAudio(file: File): Promise<Float32Array> {
+async function decodeWithWebAudio(
+  file: File,
+  signal?: AbortSignal
+): Promise<Float32Array> {
   const AudioCtx =
     window.AudioContext ||
     (window as unknown as { webkitAudioContext: typeof AudioContext })
@@ -49,10 +75,48 @@ async function decodeWithWebAudio(file: File): Promise<Float32Array> {
   }
 
   const buffer = await file.arrayBuffer();
+  throwIfAborted(signal);
   const audioCtx = new AudioCtx();
 
   try {
-    const decoded = await audioCtx.decodeAudioData(buffer);
+    const decoded = await new Promise<AudioBuffer>((resolve, reject) => {
+      let done = false;
+      const timer = window.setTimeout(() => {
+        if (!done) {
+          done = true;
+          reject(new Error("Web Audio decode timeout"));
+        }
+      }, WEB_AUDIO_TIMEOUT_MS);
+
+      const onAbort = () => {
+        if (!done) {
+          done = true;
+          window.clearTimeout(timer);
+          reject(new Error("Transcripción cancelada."));
+        }
+      };
+      signal?.addEventListener("abort", onAbort, { once: true });
+
+      audioCtx
+        .decodeAudioData(buffer)
+        .then((res) => {
+          if (!done) {
+            done = true;
+            window.clearTimeout(timer);
+            signal?.removeEventListener("abort", onAbort);
+            resolve(res);
+          }
+        })
+        .catch((err) => {
+          if (!done) {
+            done = true;
+            window.clearTimeout(timer);
+            signal?.removeEventListener("abort", onAbort);
+            reject(err);
+          }
+        });
+    });
+
     if (decoded.numberOfChannels === 0 || decoded.duration <= 0) {
       throw new Error("El video no contiene audio");
     }

@@ -207,7 +207,8 @@ export function cancelFFmpegExport(): void {
 async function fetchAsBlobURLWithFallback(
   urls: string[],
   mimeType: string,
-  onProgress?: (ratio: number) => void
+  onProgress?: (ratio: number) => void,
+  expectedUncompressedBytes = 0
 ): Promise<string> {
   let lastError: unknown = null;
 
@@ -219,15 +220,22 @@ async function fetchAsBlobURLWithFallback(
       }
 
       const contentLengthHeader = response.headers.get("Content-Length");
-      const totalBytes = contentLengthHeader ? Number(contentLengthHeader) : 0;
-      const reader = response.body?.getReader();
+      const contentEncoding = response.headers.get("Content-Encoding");
+      const headerBytes = contentLengthHeader ? Number(contentLengthHeader) : 0;
+      const totalBytes =
+        contentEncoding && expectedUncompressedBytes > 0
+          ? expectedUncompressedBytes
+          : headerBytes > 0 && Number.isFinite(headerBytes)
+            ? Math.max(headerBytes, expectedUncompressedBytes)
+            : expectedUncompressedBytes;
 
-      if (!reader || !totalBytes || !Number.isFinite(totalBytes)) {
+      if (!response.body || !totalBytes || !Number.isFinite(totalBytes)) {
         const buffer = await response.arrayBuffer();
         onProgress?.(1);
         return URL.createObjectURL(new Blob([buffer], { type: mimeType }));
       }
 
+      const reader = response.body.getReader();
       const chunks: Uint8Array[] = [];
       let received = 0;
 
@@ -272,13 +280,15 @@ async function initFFmpeg(
     coreBlobUrl = await fetchAsBlobURLWithFallback(
       candidateBases.map((b) => `${b}/ffmpeg-core.js`),
       "text/javascript",
-      (r) => onDownloadProgress?.(r * 0.05)
+      (r) => onDownloadProgress?.(r * 0.05),
+      115_000
     );
 
     wasmBlobUrl = await fetchAsBlobURLWithFallback(
       candidateBases.map((b) => `${b}/ffmpeg-core.wasm`),
       "application/wasm",
-      (r) => onDownloadProgress?.(0.05 + r * 0.9)
+      (r) => onDownloadProgress?.(0.05 + r * 0.9),
+      32_250_000
     );
 
     await ffmpeg.load({ coreURL: coreBlobUrl, wasmURL: wasmBlobUrl });
@@ -343,9 +353,10 @@ function getSafeVideoExtension(fileName: string): string {
  * Fallback audio decoder via FFmpeg.wasm for MOV/QuickTime or codecs unsupported by AudioContext.
  */
 export async function extractAudioPcmWithFFmpeg(
-  file: File
+  file: File,
+  onDownloadProgress?: (ratio: number) => void
 ): Promise<Float32Array> {
-  const ffmpeg = await getFFmpeg();
+  const ffmpeg = await getFFmpeg(onDownloadProgress);
   const ext = getSafeVideoExtension(file.name);
   const inputName = `probe_input.${ext}`;
   const outName = "audio_16k.f32";

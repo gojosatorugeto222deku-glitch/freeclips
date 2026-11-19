@@ -31,6 +31,11 @@ import {
   normalizeUsageState,
 } from "@/lib/usageLimits";
 import {
+  formatMegabytes,
+  formatTranscriptionError,
+  ModelDownloadTracker,
+} from "@/lib/transcriptionProgress";
+import {
   cuesToSrt,
   findActiveCueAndWord,
   groupWordsIntoCues,
@@ -515,5 +520,89 @@ describe("stripeServer helpers", () => {
         metadata: { app: "other_unrelated_app" },
       })
     ).toBe(false);
+  });
+});
+
+describe("ModelDownloadTracker and transcription error formatting", () => {
+  it("computes monotonic aggregate progress across parallel files without jumping to 100% on JSON configs", () => {
+    const tracker = new ModelDownloadTracker(40_000_000);
+
+    // Tiny JSON metadata completes first — MUST NOT lock at 100% or initializing!
+    const cfg = tracker.update({
+      status: "progress",
+      file: "config.json",
+      loaded: 2_000,
+      total: 2_000,
+      progress: 100,
+    });
+    expect(cfg?.progress).toBeLessThan(5);
+    expect(cfg?.phase).toBe("downloading");
+
+    const cfgDone = tracker.update({
+      status: "done",
+      file: "config.json",
+    });
+    expect(cfgDone?.progress).toBeLessThan(5);
+    expect(cfgDone?.phase).toBe("downloading");
+
+    const p1 = tracker.update({
+      status: "progress",
+      file: "onnx/encoder_model_quantized.onnx",
+      loaded: 5_000_000,
+      total: 10_000_000,
+      progress: 50,
+    });
+    expect(p1?.progress).toBeGreaterThanOrEqual(12);
+    expect(p1?.phase).toBe("downloading");
+
+    // Second large file starts at 0 bytes: aggregate must NOT drop
+    const p2 = tracker.update({
+      status: "initiate",
+      file: "onnx/decoder_model_merged_quantized.onnx",
+    });
+    expect(p2?.progress).toBeGreaterThanOrEqual(p1!.progress);
+
+    const p3 = tracker.update({
+      status: "progress",
+      file: "onnx/decoder_model_merged_quantized.onnx",
+      loaded: 15_000_000,
+      total: 30_000_000,
+      progress: 50,
+    });
+    expect(p3?.progress).toBe(50);
+    expect(p3?.loaded).toBeGreaterThanOrEqual(20_000_000);
+
+    // First ONNX weight completes — still downloading decoder, NEVER drops to 0%
+    const p4 = tracker.update({
+      status: "done",
+      file: "onnx/encoder_model_quantized.onnx",
+    });
+    expect(p4?.progress).toBeGreaterThanOrEqual(62);
+    expect(p4?.phase).toBe("downloading");
+
+    // Second ONNX weight completes — now enters initializing at 100%
+    const p5 = tracker.update({
+      status: "done",
+      file: "onnx/decoder_model_merged_quantized.onnx",
+    });
+    expect(p5?.progress).toBe(100);
+    expect(p5?.phase).toBe("initializing");
+
+    expect(formatMegabytes(39 * 1024 * 1024)).toBe("39.0 MB");
+  });
+
+  it("translates timeout, network, cancel, and OOM transcription errors into clear Spanish", () => {
+    expect(formatTranscriptionError(new Error("Transcripción cancelada."))).toContain(
+      "cancelada"
+    );
+    expect(formatTranscriptionError(new Error("timeout waiting for worker"))).toContain(
+      "Ligero"
+    );
+    expect(formatTranscriptionError(new TypeError("Failed to fetch"))).toContain(
+      "conexión"
+    );
+    expect(formatTranscriptionError(new Error("out of bounds memory"))).toContain(
+      "sin memoria"
+    );
   });
 });

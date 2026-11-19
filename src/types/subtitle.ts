@@ -73,6 +73,7 @@ export interface ModelProgressInfo {
   loaded?: number;
   total?: number;
   status: string;
+  phase?: "downloading" | "initializing";
 }
 
 export type ExportQualityPreset = "fast" | "balanced" | "high";

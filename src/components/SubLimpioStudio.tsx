@@ -10,7 +10,9 @@ import {
 } from "react";
 import {
   AlertCircle,
+  Check,
   CheckCircle2,
+  ChevronRight,
   Crown,
   Download,
   Lock,
@@ -81,6 +83,7 @@ import {
   subscribeLocalStorage,
 } from "@/lib/usageLimits";
 import {
+  cancelTranscription,
   disposeWhisperWorker,
   transcribeAudioInBrowser,
 } from "@/lib/whisperClient";
@@ -101,6 +104,7 @@ type StudioTab = "subtitles" | "style" | "export";
 export function SubLimpioStudio() {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const cancelRequestedRef = useRef(false);
+  const transcriptionAbortRef = useRef<AbortController | null>(null);
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -140,9 +144,9 @@ export function SubLimpioStudio() {
     DEFAULT_SUBTITLE_SETTINGS
   );
 
-  // Whisper transcription state
+  // AI transcription state (default to Ligero ~39 MB for fast, reliable load on desktop & mobile)
   const [selectedModel, setSelectedModel] = useState<WhisperModelId>(
-    "onnx-community/whisper-base_timestamped"
+    "onnx-community/whisper-tiny_timestamped"
   );
   const [transcriptionStage, setTranscriptionStage] =
     useState<TranscriptionStage>("idle");
@@ -150,6 +154,7 @@ export function SubLimpioStudio() {
   const [modelProgress, setModelProgress] = useState<ModelProgressInfo | null>(
     null
   );
+  const [livePreviewText, setLivePreviewText] = useState("");
   const [activeDevice, setActiveDevice] = useState<"webgpu" | "wasm" | null>(
     null
   );
@@ -349,6 +354,12 @@ export function SubLimpioStudio() {
         return;
       }
 
+      if (transcriptionAbortRef.current) {
+        transcriptionAbortRef.current.abort();
+        transcriptionAbortRef.current = null;
+        cancelTranscription();
+      }
+
       const mobileNow = isMobileBrowser();
       setIsMobile(mobileNow);
       setMobileWarningDismissed(false);
@@ -375,6 +386,7 @@ export function SubLimpioStudio() {
       setTranscriptionStage("idle");
       setTranscriptionError(null);
       setModelProgress(null);
+      setLivePreviewText("");
       setExportStage("idle");
       setDownloadProgress(0);
       setExportProgress(0);
@@ -411,6 +423,21 @@ export function SubLimpioStudio() {
     }));
   }, []);
 
+  const handleCancelTranscription = useCallback(() => {
+    if (transcriptionAbortRef.current) {
+      transcriptionAbortRef.current.abort();
+      transcriptionAbortRef.current = null;
+    }
+    cancelTranscription();
+    disposeFFmpeg();
+    setIsFfmpegWarm(false);
+    setTranscriptionStage("idle");
+    setTranscriptionMessage("");
+    setModelProgress(null);
+    setLivePreviewText("");
+    setTranscriptionError("Transcripción cancelada.");
+  }, []);
+
   const handleStartTranscription = async () => {
     if (!videoFile) return;
     if (!checkCanProcessVideo()) return;
@@ -419,30 +446,54 @@ export function SubLimpioStudio() {
     disposeFFmpeg();
     setIsFfmpegWarm(false);
 
+    const abortController = new AbortController();
+    transcriptionAbortRef.current = abortController;
+
     setTranscriptionError(null);
     setModelProgress(null);
+    setLivePreviewText("");
     setTranscriptionStage("extracting-audio");
     setTranscriptionMessage("Decodificando pista de audio a 16 kHz...");
 
     try {
-      const pcm = await extractAudio16kMono(videoFile, () => {
-        setTranscriptionMessage("Extrayendo pista de audio del video...");
+      const pcm = await extractAudio16kMono(videoFile, {
+        signal: abortController.signal,
+        onFallbackToFFmpeg: () => {
+          setTranscriptionMessage(
+            "Preparando extractor de audio compatible..."
+          );
+        },
+        onFfmpegDownloadProgress: (ratio) => {
+          setModelProgress({
+            file: "audio-extractor",
+            progress: Math.round(Math.max(0, Math.min(100, ratio * 100))),
+            status: "progress",
+            phase: ratio >= 1 ? "initializing" : "downloading",
+          });
+        },
       });
 
+      if (abortController.signal.aborted) return;
+
+      setModelProgress(null);
       setTranscriptionStage("loading-model");
-      setTranscriptionMessage("Cargando modelo de voz en español...");
+      setTranscriptionMessage("Preparando modelo de voz IA...");
 
       const result = await transcribeAudioInBrowser({
         audio: pcm,
         modelId: selectedModel,
         durationSec: videoMeta?.duration || undefined,
+        signal: abortController.signal,
         onDeviceDetected: (dev) => setActiveDevice(dev),
         onStatus: (stage, msg) => {
           setTranscriptionStage(stage);
           setTranscriptionMessage(msg);
         },
         onModelProgress: (progress) => setModelProgress(progress),
+        onLiveText: (text) => setLivePreviewText(text),
       });
+
+      if (abortController.signal.aborted) return;
 
       const grouped = groupWordsIntoCues(
         result.words,
@@ -451,7 +502,7 @@ export function SubLimpioStudio() {
       if (grouped.length === 0) {
         setTranscriptionStage("error");
         setTranscriptionError(
-          "No se detectaron palabras claras en español. Prueba el modo Preciso o añade subtítulos manualmente."
+          "No se detectaron palabras claras en español. Prueba el modo Balanceado o verifica que el video tenga voz audible."
         );
         return;
       }
@@ -459,9 +510,12 @@ export function SubLimpioStudio() {
       setCues(grouped);
       setTranscriptionStage("ready");
       setTranscriptionMessage("");
+      setModelProgress(null);
+      setLivePreviewText("");
       markVideoCreditConsumed();
       markExportStaleIfNeeded();
     } catch (err) {
+      if (abortController.signal.aborted) return;
       setTranscriptionStage("error");
       setTranscriptionError(
         err instanceof Error
@@ -469,6 +523,9 @@ export function SubLimpioStudio() {
           : "No se pudo completar la transcripción en el navegador."
       );
     } finally {
+      if (transcriptionAbortRef.current === abortController) {
+        transcriptionAbortRef.current = null;
+      }
       // Phase 1 cleanup: completely destroy/release Transformers.js pipeline & worker RAM
       // before the user triggers Phase 2 (FFmpeg export).
       await disposeWhisperWorker();
@@ -591,7 +648,7 @@ export function SubLimpioStudio() {
     setExportStage("loading-ffmpeg");
 
     try {
-      // Sequential Phase 2 guard: release any lingering Whisper worker/tensors and yield briefly
+      // Sequential Phase 2 guard: release any lingering AI worker/tensors and yield briefly
       // so mobile browsers reclaim RAM before allocating FFmpeg WASM.
       await disposeWhisperWorker();
       await new Promise((resolve) => setTimeout(resolve, 60));
@@ -675,6 +732,7 @@ export function SubLimpioStudio() {
   const isBusy = isTranscribing || isExporting;
 
   const validCueCount = cues.filter((c) => c.text.trim().length > 0).length;
+  const hasExported = Boolean(exportedVideoUrl && exportStage === "done");
 
   return (
     <div className="studio-grid-bg flex min-h-screen flex-col">
@@ -755,6 +813,96 @@ export function SubLimpioStudio() {
           />
         ) : (
           <div className="space-y-4">
+            {/* Guided 3-Step Studio Workflow Bar */}
+            <div className="studio-surface-subtle flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/[0.08] px-3.5 py-2.5">
+              <div className="flex flex-wrap items-center gap-1.5 sm:gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("subtitles")}
+                  className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                    activeTab === "subtitles"
+                      ? "bg-yellow-400/15 text-yellow-200 ring-1 ring-yellow-400/40"
+                      : validCueCount > 0
+                        ? "text-emerald-300 hover:bg-white/[0.05]"
+                        : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                      validCueCount > 0
+                        ? "bg-emerald-400 text-black"
+                        : activeTab === "subtitles"
+                          ? "bg-yellow-400 text-black"
+                          : "bg-white/10 text-zinc-300"
+                    }`}
+                  >
+                    {validCueCount > 0 ? <Check className="h-3 w-3 stroke-[3]" /> : "1"}
+                  </span>
+                  <span>Transcribir</span>
+                </button>
+
+                <ChevronRight className="hidden h-3.5 w-3.5 text-zinc-600 sm:block" />
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("style")}
+                  className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                    activeTab === "style"
+                      ? "bg-yellow-400/15 text-yellow-200 ring-1 ring-yellow-400/40"
+                      : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                      activeTab === "style"
+                        ? "bg-yellow-400 text-black"
+                        : "bg-white/10 text-zinc-300"
+                    }`}
+                  >
+                    2
+                  </span>
+                  <span>Personalizar estilo</span>
+                </button>
+
+                <ChevronRight className="hidden h-3.5 w-3.5 text-zinc-600 sm:block" />
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("export")}
+                  className={`inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-xs font-semibold transition ${
+                    activeTab === "export"
+                      ? "bg-yellow-400/15 text-yellow-200 ring-1 ring-yellow-400/40"
+                      : hasExported
+                        ? "text-emerald-300 hover:bg-white/[0.05]"
+                        : "text-zinc-400 hover:bg-white/[0.05] hover:text-zinc-200"
+                  }`}
+                >
+                  <span
+                    className={`flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ${
+                      hasExported
+                        ? "bg-emerald-400 text-black"
+                        : activeTab === "export"
+                          ? "bg-yellow-400 text-black"
+                          : "bg-white/10 text-zinc-300"
+                    }`}
+                  >
+                    {hasExported ? <Check className="h-3 w-3 stroke-[3]" /> : "3"}
+                  </span>
+                  <span>Exportar MP4</span>
+                </button>
+              </div>
+
+              <div className="hidden items-center gap-2 text-[11px] text-zinc-400 md:flex">
+                <span className="truncate max-w-[200px] font-medium text-zinc-200">
+                  {videoMeta.name}
+                </span>
+                <span className="text-zinc-600">·</span>
+                <span className="font-mono">
+                  {formatFileSizeMb(videoMeta.sizeBytes)} MB
+                </span>
+              </div>
+            </div>
+
             {isMobile &&
               videoMeta.sizeBytes > MOBILE_WARNING_BYTES &&
               !mobileWarningDismissed && (
@@ -813,7 +961,7 @@ export function SubLimpioStudio() {
               </div>
             )}
 
-            <div className="grid flex-1 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.18fr)_440px]">
+            <div className="grid flex-1 grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,1.18fr)_448px]">
               {/* Left Stage: Video + Live Synced Subtitles */}
               <div className="lg:sticky lg:top-20">
                 <VideoStage
@@ -829,15 +977,15 @@ export function SubLimpioStudio() {
               </div>
 
               {/* Right Studio Sidebar */}
-              <section className="flex flex-col rounded-2xl border border-white/[0.08] bg-[#0f1117]">
+              <section className="studio-surface flex flex-col rounded-2xl border border-white/[0.08]">
                 {/* Tab Bar */}
-                <div className="grid grid-cols-3 gap-1 border-b border-white/[0.08] p-2">
+                <div className="grid grid-cols-3 gap-1.5 border-b border-white/[0.08] p-2">
                   <button
                     type="button"
                     onClick={() => setActiveTab("subtitles")}
-                    className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+                    className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
                       activeTab === "subtitles"
-                        ? "bg-white/[0.09] text-white shadow-sm"
+                        ? "bg-white/[0.1] text-white shadow-sm ring-1 ring-white/10"
                         : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
                     }`}
                   >
@@ -848,9 +996,9 @@ export function SubLimpioStudio() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("style")}
-                    className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+                    className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
                       activeTab === "style"
-                        ? "bg-white/[0.09] text-white shadow-sm"
+                        ? "bg-white/[0.1] text-white shadow-sm ring-1 ring-white/10"
                         : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
                     }`}
                   >
@@ -861,9 +1009,9 @@ export function SubLimpioStudio() {
                   <button
                     type="button"
                     onClick={() => setActiveTab("export")}
-                    className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+                    className={`flex items-center justify-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-bold transition ${
                       activeTab === "export"
-                        ? "bg-yellow-400 text-black shadow-sm"
+                        ? "bg-gradient-to-r from-yellow-300 via-yellow-400 to-amber-400 text-black shadow-sm"
                         : "text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200"
                     }`}
                   >
@@ -885,10 +1033,12 @@ export function SubLimpioStudio() {
                       stage={transcriptionStage}
                       statusMessage={transcriptionMessage}
                       modelProgress={modelProgress}
+                      livePreviewText={livePreviewText}
                       activeDevice={activeDevice}
                       errorMessage={transcriptionError}
                       videoName={videoMeta.name}
                       onStartTranscription={handleStartTranscription}
+                      onCancelTranscription={handleCancelTranscription}
                       onRequirePro={openProModal}
                       onSeekTo={handleSeekTo}
                       onUpdateCueText={handleUpdateCueText}

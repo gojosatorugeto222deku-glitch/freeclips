@@ -184,23 +184,23 @@ export const WHISPER_MODELS: WhisperModelOption[] = [
   {
     id: "onnx-community/whisper-tiny_timestamped",
     label: "Ligero",
-    badge: "Rápido",
-    sizeHint: "~45 MB",
-    description: "Carga veloz e ideal para clips cortos o equipos modestos.",
+    badge: "Recomendado",
+    sizeHint: "~39 MB",
+    description: "Descarga rápida (~15s) e ideal para clips cortos y celulares.",
   },
   {
     id: "onnx-community/whisper-base_timestamped",
     label: "Balanceado",
-    badge: "Recomendado",
-    sizeHint: "~80 MB",
-    description: "Mejor balance entre velocidad en el navegador y precisión en español.",
+    badge: "Más preciso",
+    sizeHint: "~73 MB",
+    description: "Mejor exactitud en español con carga moderada en el navegador.",
   },
   {
     id: "onnx-community/whisper-small_timestamped",
     label: "Preciso",
     badge: "Alta precisión",
-    sizeHint: "~250 MB",
-    description: "Mayor exactitud para acentos complejos o ruido ambiental.",
+    sizeHint: "~237 MB",
+    description: "Máxima exactitud en PC para acentos complejos o ruido ambiental.",
   },
 ];
 
