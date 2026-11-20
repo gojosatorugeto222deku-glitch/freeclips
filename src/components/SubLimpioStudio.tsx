@@ -33,7 +33,10 @@ import {
 } from "@/components/UploadDropzone";
 import { VideoStage } from "@/components/VideoStage";
 import { generateAssSubtitles } from "@/lib/assGenerator";
-import { extractAudio16kMono } from "@/lib/audioExtractor";
+import {
+  extractAudio16kMono,
+  tryDecodeWithWebAudioFast,
+} from "@/lib/audioExtractor";
 import {
   formatFileSizeMb,
   isMobileBrowser,
@@ -85,7 +88,9 @@ import {
 import {
   cancelTranscription,
   disposeWhisperWorker,
+  isTranscriptionEngineWarm,
   transcribeAudioInBrowser,
+  warmupTranscriptionEngine,
 } from "@/lib/whisperClient";
 import type {
   ExportQualityPreset,
@@ -105,6 +110,10 @@ export function SubLimpioStudio() {
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
   const cancelRequestedRef = useRef(false);
   const transcriptionAbortRef = useRef<AbortController | null>(null);
+  const preExtractedAudioRef = useRef<{
+    file: File;
+    promise: Promise<Float32Array | null>;
+  } | null>(null);
 
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
@@ -158,6 +167,9 @@ export function SubLimpioStudio() {
   const [activeDevice, setActiveDevice] = useState<"webgpu" | "wasm" | null>(
     null
   );
+  const [engineWarmState, setEngineWarmState] = useState<
+    "idle" | "warming" | "ready"
+  >("idle");
   const [transcriptionError, setTranscriptionError] = useState<string | null>(
     null
   );
@@ -204,6 +216,7 @@ export function SubLimpioStudio() {
       let cancelled = false;
       void disposeWhisperWorker().then(() => {
         if (!cancelled) {
+          setEngineWarmState("idle");
           preloadFFmpeg();
         }
       });
@@ -216,6 +229,54 @@ export function SubLimpioStudio() {
       };
     }
   }, [activeTab, isMobile]);
+
+  // Pre-warm lightweight AI engine in the background as soon as a video enters the studio
+  // so clicking "Transcribir" starts inference immediately with near-zero setup wait.
+  useEffect(() => {
+    if (!videoFile || activeTab !== "subtitles") return;
+    if (
+      transcriptionStage === "extracting-audio" ||
+      transcriptionStage === "loading-model" ||
+      transcriptionStage === "transcribing"
+    ) {
+      return;
+    }
+
+    if (isTranscriptionEngineWarm(selectedModel)) {
+      Promise.resolve().then(() => setEngineWarmState("ready"));
+      return;
+    }
+
+    // Auto-prewarm Ligero (~39 MB self-hosted) on all devices; only prewarm larger models on desktop.
+    const shouldAutoPrewarm =
+      selectedModel === "onnx-community/whisper-tiny_timestamped" || !isMobile;
+    if (!shouldAutoPrewarm) {
+      Promise.resolve().then(() => setEngineWarmState("idle"));
+      return;
+    }
+
+    let cancelled = false;
+    Promise.resolve().then(() => {
+      if (!cancelled) setEngineWarmState("warming");
+    });
+
+    void warmupTranscriptionEngine(selectedModel)
+      .then(() => {
+        if (!cancelled) {
+          setEngineWarmState("ready");
+          setActiveDevice("wasm");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEngineWarmState("idle");
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [videoFile, selectedModel, activeTab, isMobile, transcriptionStage]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -369,6 +430,12 @@ export function SubLimpioStudio() {
       }
 
       const nextUrl = URL.createObjectURL(file);
+      // Pre-extract 16 kHz PCM audio in the background using fast native Web Audio
+      // so audio is already decoded by the time the user clicks Transcribe.
+      preExtractedAudioRef.current = {
+        file,
+        promise: tryDecodeWithWebAudioFast(file),
+      };
       setVideoFile(file);
       setVideoUrl(nextUrl);
       setVideoMeta({
@@ -431,6 +498,7 @@ export function SubLimpioStudio() {
     cancelTranscription();
     disposeFFmpeg();
     setIsFfmpegWarm(false);
+    setEngineWarmState("idle");
     setTranscriptionStage("idle");
     setTranscriptionMessage("");
     setModelProgress(null);
@@ -456,33 +524,45 @@ export function SubLimpioStudio() {
     setTranscriptionMessage("Decodificando pista de audio a 16 kHz...");
 
     try {
-      const pcm = await extractAudio16kMono(videoFile, {
-        signal: abortController.signal,
-        onFallbackToFFmpeg: () => {
-          setTranscriptionMessage(
-            "Preparando extractor de audio compatible..."
-          );
-        },
-        onFfmpegDownloadProgress: (ratio) => {
-          setModelProgress({
-            file: "audio-extractor",
-            progress: Math.round(Math.max(0, Math.min(100, ratio * 100))),
-            status: "progress",
-            phase: ratio >= 1 ? "initializing" : "downloading",
-          });
-        },
-      });
+      let pcm: Float32Array | null = null;
+      if (preExtractedAudioRef.current?.file === videoFile) {
+        pcm = await preExtractedAudioRef.current.promise.catch(() => null);
+      }
+      if (!pcm || pcm.length === 0) {
+        pcm = await extractAudio16kMono(videoFile, {
+          signal: abortController.signal,
+          onFallbackToFFmpeg: () => {
+            setTranscriptionMessage(
+              "Preparando extractor de audio compatible..."
+            );
+          },
+          onFfmpegDownloadProgress: (ratio) => {
+            setModelProgress({
+              file: "audio-extractor",
+              progress: Math.round(Math.max(0, Math.min(100, ratio * 100))),
+              status: "progress",
+              phase: ratio >= 1 ? "initializing" : "downloading",
+            });
+          },
+        });
+      }
 
       if (abortController.signal.aborted) return;
 
+      const engineAlreadyWarm = isTranscriptionEngineWarm(selectedModel);
       setModelProgress(null);
-      setTranscriptionStage("loading-model");
-      setTranscriptionMessage("Preparando modelo de voz IA...");
+      setTranscriptionStage(engineAlreadyWarm ? "transcribing" : "loading-model");
+      setTranscriptionMessage(
+        engineAlreadyWarm
+          ? "Transcribiendo voz en español..."
+          : "Preparando modelo de voz IA..."
+      );
 
       const result = await transcribeAudioInBrowser({
         audio: pcm,
         modelId: selectedModel,
         durationSec: videoMeta?.duration || undefined,
+        isMobile,
         signal: abortController.signal,
         onDeviceDetected: (dev) => setActiveDevice(dev),
         onStatus: (stage, msg) => {
@@ -491,6 +571,16 @@ export function SubLimpioStudio() {
         },
         onModelProgress: (progress) => setModelProgress(progress),
         onLiveText: (text) => setLivePreviewText(text),
+        onPartialWords: (partialWords) => {
+          if (abortController.signal.aborted || partialWords.length === 0) return;
+          const progressive = groupWordsIntoCues(
+            partialWords,
+            settings.maxWordsPerCue
+          );
+          if (progressive.length > 0) {
+            setCues(progressive);
+          }
+        },
       });
 
       if (abortController.signal.aborted) return;
@@ -512,6 +602,7 @@ export function SubLimpioStudio() {
       setTranscriptionMessage("");
       setModelProgress(null);
       setLivePreviewText("");
+      setEngineWarmState(isMobile ? "idle" : "ready");
       markVideoCreditConsumed();
       markExportStaleIfNeeded();
     } catch (err) {
@@ -526,9 +617,12 @@ export function SubLimpioStudio() {
       if (transcriptionAbortRef.current === abortController) {
         transcriptionAbortRef.current = null;
       }
-      // Phase 1 cleanup: completely destroy/release Transformers.js pipeline & worker RAM
-      // before the user triggers Phase 2 (FFmpeg export).
-      await disposeWhisperWorker();
+      // Mobile browsers: release AI worker & ONNX tensors immediately after Phase 1.
+      // Desktop keeps the lightweight worker warm for instant re-runs and disposes it before Phase 2 (FFmpeg).
+      if (isMobile) {
+        await disposeWhisperWorker();
+        setEngineWarmState("idle");
+      }
     }
   };
 
@@ -651,6 +745,7 @@ export function SubLimpioStudio() {
       // Sequential Phase 2 guard: release any lingering AI worker/tensors and yield briefly
       // so mobile browsers reclaim RAM before allocating FFmpeg WASM.
       await disposeWhisperWorker();
+      setEngineWarmState("idle");
       await new Promise((resolve) => setTimeout(resolve, 60));
 
       const effectiveStyle = resolveEffectiveStyle(settings);
@@ -1035,6 +1130,7 @@ export function SubLimpioStudio() {
                       modelProgress={modelProgress}
                       livePreviewText={livePreviewText}
                       activeDevice={activeDevice}
+                      engineWarmState={engineWarmState}
                       errorMessage={transcriptionError}
                       videoName={videoMeta.name}
                       onStartTranscription={handleStartTranscription}

@@ -17,6 +17,7 @@ import {
   Sparkles,
   Trash2,
   XCircle,
+  Zap,
 } from "lucide-react";
 import { WHISPER_MODELS } from "@/lib/styles";
 import {
@@ -46,6 +47,7 @@ interface SubtitleEditorProps {
   modelProgress: ModelProgressInfo | null;
   livePreviewText: string;
   activeDevice: "webgpu" | "wasm" | null;
+  engineWarmState?: "idle" | "warming" | "ready";
   errorMessage: string | null;
   videoName: string;
   onStartTranscription: () => void;
@@ -80,6 +82,7 @@ export function SubtitleEditor({
   modelProgress,
   livePreviewText,
   activeDevice,
+  engineWarmState = "idle",
   errorMessage,
   videoName,
   onStartTranscription,
@@ -190,12 +193,22 @@ export function SubtitleEditor({
               Detecta voz en español palabra por palabra directo en tu equipo.
             </p>
           </div>
-          {activeDevice && (
+          {engineWarmState === "ready" ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/35 bg-emerald-400/12 px-2.5 py-0.5 text-[10.5px] font-semibold text-emerald-300">
+              <Zap className="h-3 w-3 text-emerald-300" />
+              Motor listo
+            </span>
+          ) : engineWarmState === "warming" && !isBusy ? (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-2.5 py-0.5 text-[10.5px] font-medium text-yellow-200">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Preparando IA...
+            </span>
+          ) : activeDevice ? (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-400/25 bg-emerald-400/10 px-2 py-0.5 text-[10.5px] font-semibold text-emerald-300">
               <Cpu className="h-3 w-3" />
               {activeDevice === "webgpu" ? "GPU rápida" : "Motor local"}
             </span>
-          )}
+          ) : null}
         </div>
 
         {/* Model Selector */}

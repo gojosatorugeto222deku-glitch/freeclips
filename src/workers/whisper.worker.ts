@@ -27,10 +27,17 @@ type OnnxBackendEnv = {
 
 type WorkerRequestMessage =
   | {
+      type: "warmup";
+      requestId: string;
+      modelId: WhisperModelId;
+    }
+  | {
       type: "transcribe";
       requestId: string;
       modelId: WhisperModelId;
       audio: Float32Array;
+      fastTimestamps?: boolean;
+      keepAlive?: boolean;
     }
   | {
       type: "dispose";
@@ -41,6 +48,7 @@ const FETCH_HEADER_TIMEOUT_MS = 22_000;
 const FETCH_MAX_ATTEMPTS = 3;
 const SELF_HOSTED_MODEL_ID: WhisperModelId =
   "onnx-community/whisper-tiny_timestamped";
+const SINGLE_WINDOW_SAMPLES = 30 * 16000;
 
 // Guard against HuggingFace/CDN connections that hang before sending headers.
 const nativeFetch = self.fetch.bind(self);
@@ -93,7 +101,6 @@ const resilientFetch: typeof fetch = async (
   throw lastError;
 };
 
-// Override both global fetch and Transformers.js's captured env.fetch reference.
 self.fetch = resilientFetch;
 (env as unknown as { fetch?: typeof fetch }).fetch = resilientFetch;
 
@@ -126,6 +133,11 @@ configureOnnxWasm("compact");
 
 let cachedModelId: WhisperModelId | null = null;
 let cachedPipeline: AutomaticSpeechRecognitionPipeline | null = null;
+let inflightLoad: {
+  modelId: WhisperModelId;
+  promise: Promise<AutomaticSpeechRecognitionPipeline>;
+  listeners: Set<(info: RawHfProgressEvent) => void>;
+} | null = null;
 
 async function disposeCachedPipeline(): Promise<void> {
   if (cachedPipeline && typeof cachedPipeline.dispose === "function") {
@@ -137,49 +149,9 @@ async function disposeCachedPipeline(): Promise<void> {
 
 async function createPipelineWithWasmFallback(
   modelId: WhisperModelId,
-  requestId: string
+  onRawProgress: (info: RawHfProgressEvent) => void
 ): Promise<AutomaticSpeechRecognitionPipeline> {
-  // Use same-origin self-hosted weights for Ligero (avoids HuggingFace CDN throttling),
-  // with automatic fallback to HuggingFace if any local file is absent.
   env.allowLocalModels = modelId === SELF_HOSTED_MODEL_ID;
-
-  const tracker = new ModelDownloadTracker(EXPECTED_MODEL_BYTES[modelId] ?? 0);
-  let lastProgressSentAt = 0;
-  let lastProgressPct = -1;
-  let sentInitializingStatus = false;
-
-  const progressCallback = (info: RawHfProgressEvent) => {
-    const agg = tracker.update(info);
-    if (!agg) return;
-
-    const now = Date.now();
-    const shouldSend =
-      agg.phase === "initializing" ||
-      agg.progress === 100 ||
-      agg.progress !== lastProgressPct ||
-      now - lastProgressSentAt >= 200;
-
-    if (!shouldSend) return;
-
-    lastProgressSentAt = now;
-    lastProgressPct = agg.progress;
-
-    self.postMessage({
-      type: "progress",
-      requestId,
-      progress: agg,
-    });
-
-    if (agg.phase === "initializing" && !sentInitializingStatus) {
-      sentInitializingStatus = true;
-      self.postMessage({
-        type: "status",
-        requestId,
-        stage: "loading-model",
-        message: "Inicializando motor de voz IA...",
-      });
-    }
-  };
 
   const variants: Array<"compact" | "asyncify"> = ["compact", "asyncify"];
   let lastErr: unknown;
@@ -194,7 +166,7 @@ async function createPipelineWithWasmFallback(
           encoder_model: "q8",
           decoder_model_merged: "q8",
         },
-        progress_callback: progressCallback,
+        progress_callback: onRawProgress,
       });
     } catch (err) {
       lastErr = err;
@@ -219,42 +191,115 @@ async function createPipelineWithWasmFallback(
 
 async function getOrCreatePipeline(
   modelId: WhisperModelId,
-  requestId: string
+  requestId: string,
+  silentStatus = false
 ): Promise<AutomaticSpeechRecognitionPipeline> {
   if (cachedPipeline && cachedModelId === modelId) {
     return cachedPipeline;
   }
 
+  const tracker = new ModelDownloadTracker(EXPECTED_MODEL_BYTES[modelId] ?? 0);
+  let lastProgressSentAt = 0;
+  let lastProgressPct = -1;
+  let sentInitializingStatus = false;
+
+  const listener = (info: RawHfProgressEvent) => {
+    const agg = tracker.update(info);
+    if (!agg) return;
+
+    const now = Date.now();
+    const shouldSend =
+      agg.phase === "initializing" ||
+      agg.progress === 100 ||
+      agg.progress !== lastProgressPct ||
+      now - lastProgressSentAt >= 200;
+
+    if (!shouldSend) return;
+
+    lastProgressSentAt = now;
+    lastProgressPct = agg.progress;
+
+    self.postMessage({
+      type: "progress",
+      requestId,
+      progress: agg,
+    });
+
+    if (agg.phase === "initializing" && !sentInitializingStatus && !silentStatus) {
+      sentInitializingStatus = true;
+      self.postMessage({
+        type: "status",
+        requestId,
+        stage: "loading-model",
+        message: "Inicializando motor de voz IA...",
+      });
+    }
+  };
+
+  if (inflightLoad && inflightLoad.modelId === modelId) {
+    if (!silentStatus) {
+      self.postMessage({
+        type: "status",
+        requestId,
+        stage: "loading-model",
+        message: "Finalizando carga del motor de voz IA...",
+      });
+    }
+    inflightLoad.listeners.add(listener);
+    try {
+      return await inflightLoad.promise;
+    } finally {
+      inflightLoad?.listeners.delete(listener);
+    }
+  }
+
   if (cachedPipeline && typeof cachedPipeline.dispose === "function") {
     await cachedPipeline.dispose().catch(() => {});
     cachedPipeline = null;
+    cachedModelId = null;
   }
 
-  self.postMessage({
-    type: "status",
-    requestId,
-    stage: "loading-model",
-    message: "Descargando modelo de voz IA (solo la primera vez)...",
-  });
+  if (!silentStatus) {
+    self.postMessage({
+      type: "status",
+      requestId,
+      stage: "loading-model",
+      message: "Descargando modelo de voz IA (solo la primera vez)...",
+    });
+  }
 
-  const asr = await createPipelineWithWasmFallback(modelId, requestId);
-  cachedPipeline = asr;
-  cachedModelId = modelId;
-  return asr;
+  const listeners = new Set<(info: RawHfProgressEvent) => void>([listener]);
+  const loadPromise = createPipelineWithWasmFallback(modelId, (info) => {
+    listeners.forEach((fn) => fn(info));
+  })
+    .then((asr) => {
+      cachedPipeline = asr;
+      cachedModelId = modelId;
+      return asr;
+    })
+    .finally(() => {
+      if (inflightLoad?.promise === loadPromise) {
+        inflightLoad = null;
+      }
+    });
+
+  inflightLoad = { modelId, promise: loadPromise, listeners };
+  return await loadPromise;
 }
 
 async function runTranscription(
   modelId: WhisperModelId,
   audio: Float32Array,
-  requestId: string
+  requestId: string,
+  fastTimestamps: boolean
 ) {
-  const transcriber = await getOrCreatePipeline(modelId, requestId);
+  const transcriber = await getOrCreatePipeline(modelId, requestId, false);
 
   self.postMessage({
     type: "status",
     requestId,
     stage: "transcribing",
-    message: "Transcribiendo voz en español palabra por palabra...",
+    message: "Transcribiendo voz en español...",
   });
 
   let accumulatedPreview = "";
@@ -275,7 +320,7 @@ async function runTranscription(
           if (!piece) return;
           accumulatedPreview = (accumulatedPreview + piece).slice(-220);
           const now = Date.now();
-          if (now - lastPreviewSentAt >= 240) {
+          if (now - lastPreviewSentAt >= 220) {
             lastPreviewSentAt = now;
             self.postMessage({
               type: "partial",
@@ -290,14 +335,18 @@ async function runTranscription(
     streamer = undefined;
   }
 
+  // Skip chunking/stride wrapper when audio fits inside Whisper's native 30s window (~15% faster).
+  const needsInternalChunking = audio.length > SINGLE_WINDOW_SAMPLES;
   const options: Record<string, unknown> = {
-    chunk_length_s: 30,
-    stride_length_s: 5,
-    return_timestamps: "word",
+    return_timestamps: fastTimestamps ? true : "word",
     language: "spanish",
     task: "transcribe",
     max_new_tokens: 224,
   };
+  if (needsInternalChunking) {
+    options.chunk_length_s = 30;
+    options.stride_length_s = 5;
+  }
   if (streamer) {
     options.streamer = streamer;
   }
@@ -326,13 +375,42 @@ self.addEventListener(
       return;
     }
 
+    if (data.type === "warmup") {
+      try {
+        await getOrCreatePipeline(data.modelId, data.requestId, true);
+        self.postMessage({
+          type: "warmed",
+          requestId: data.requestId,
+          modelId: data.modelId,
+        });
+      } catch (err) {
+        self.postMessage({
+          type: "warmup-error",
+          requestId: data.requestId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      return;
+    }
+
     if (data.type !== "transcribe") return;
 
-    const { requestId, modelId, audio } = data;
+    const {
+      requestId,
+      modelId,
+      audio,
+      fastTimestamps = true,
+      keepAlive = false,
+    } = data;
     self.postMessage({ type: "device", requestId, device: "wasm" });
 
     try {
-      const result = await runTranscription(modelId, audio, requestId);
+      const result = await runTranscription(
+        modelId,
+        audio,
+        requestId,
+        fastTimestamps
+      );
       self.postMessage({
         type: "result",
         requestId,
@@ -347,12 +425,12 @@ self.addEventListener(
         error: err instanceof Error ? err.message : String(err),
       });
     } finally {
-      // Phase 1 cleanup: always free Transformers.js model & tensor buffers after transcription
-      // so mobile devices have headroom before FFmpeg.wasm allocates memory.
-      await disposeCachedPipeline();
+      if (!keepAlive) {
+        // Phase 1 cleanup for mobile & temporary helper workers: release ONNX tensors immediately.
+        await disposeCachedPipeline();
+      }
     }
   }
 );
 
-// Notify host immediately once the worker script & imports finish initializing.
 self.postMessage({ type: "ready" });

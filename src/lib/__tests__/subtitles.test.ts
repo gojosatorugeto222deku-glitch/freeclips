@@ -31,6 +31,11 @@ import {
   normalizeUsageState,
 } from "@/lib/usageLimits";
 import {
+  expandChunksToWordTokens,
+  refineSpanByAudioEnergy,
+  splitAudioAtSilenceValleys,
+} from "@/lib/audioSlicer";
+import {
   formatMegabytes,
   formatTranscriptionError,
   ModelDownloadTracker,
@@ -604,5 +609,59 @@ describe("ModelDownloadTracker and transcription error formatting", () => {
     expect(formatTranscriptionError(new Error("out of bounds memory"))).toContain(
       "sin memoria"
     );
+  });
+});
+
+describe("audioSlicer speed optimizations", () => {
+  it("keeps short clips (<= 26s) in a single pass and splits longer clips at silence valleys", () => {
+    const sr = 16000;
+    const shortPcm = new Float32Array(sr * 15).fill(0.1);
+    const shortSegs = splitAudioAtSilenceValleys(shortPcm, sr, 22, 26);
+    expect(shortSegs).toHaveLength(1);
+    expect(shortSegs[0].startSec).toBe(0);
+    expect(shortSegs[0].endSec).toBe(15);
+
+    // 50s clip with loud speech everywhere EXCEPT a quiet silence valley at 21.0s–21.5s
+    const longPcm = new Float32Array(sr * 50).fill(0.25);
+    for (let i = Math.floor(21.0 * sr); i < Math.floor(21.5 * sr); i += 1) {
+      longPcm[i] = 0.001;
+    }
+    const segs = splitAudioAtSilenceValleys(longPcm, sr, 22, 26);
+    expect(segs.length).toBeGreaterThanOrEqual(2);
+    expect(segs[0].startSec).toBe(0);
+    expect(segs[0].endSec).toBeGreaterThanOrEqual(20.9);
+    expect(segs[0].endSec).toBeLessThanOrEqual(21.6);
+    expect(segs[segs.length - 1].endSec).toBe(50);
+  });
+
+  it("tightens segment spans by PCM energy and expands fast segment chunks into monotonic WordTokens", () => {
+    const sr = 16000;
+    // 4 seconds total: silence 0–0.6s, active speech 0.6–3.2s, silence 3.2–4.0s
+    const pcm = new Float32Array(sr * 4);
+    for (let i = Math.floor(0.6 * sr); i < Math.floor(3.2 * sr); i += 1) {
+      pcm[i] = Math.sin((i / sr) * 440 * Math.PI * 2) * 0.3;
+    }
+
+    const [s, e] = refineSpanByAudioEnergy(pcm, 0, 4, sr);
+    expect(s).toBeGreaterThanOrEqual(0.5);
+    expect(s).toBeLessThanOrEqual(0.65);
+    expect(e).toBeGreaterThanOrEqual(3.15);
+    expect(e).toBeLessThanOrEqual(3.35);
+
+    const words = expandChunksToWordTokens(
+      [{ text: "Hola amigos, ¡bienvenidos hoy!", timestamp: [0, 4] }],
+      { pcm, sampleRate: sr, totalDuration: 4, offsetSec: 0 }
+    );
+    expect(words.map((w) => w.text)).toEqual([
+      "Hola",
+      "amigos,",
+      "¡bienvenidos",
+      "hoy!",
+    ]);
+    expect(words[0].start).toBeGreaterThanOrEqual(0.5);
+    expect(words[words.length - 1].end).toBeLessThanOrEqual(3.4);
+    for (let i = 1; i < words.length; i += 1) {
+      expect(words[i].start).toBeGreaterThanOrEqual(words[i - 1].end);
+    }
   });
 });

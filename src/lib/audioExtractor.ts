@@ -19,6 +19,22 @@ function throwIfAborted(signal?: AbortSignal): void {
 }
 
 /**
+ * Fast native-only Web Audio decoder used for background pre-extraction when a
+ * video loads (never triggers the 31 MB FFmpeg fallback prematurely).
+ */
+export async function tryDecodeWithWebAudioFast(
+  file: File,
+  signal?: AbortSignal
+): Promise<Float32Array | null> {
+  try {
+    const pcm = await decodeWithWebAudio(file, signal);
+    return pcm.length > 0 ? pcm : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Decodes and resamples a video file's audio track to 16kHz mono Float32Array PCM.
  * Tries the native Web Audio API first for instant decoding, and automatically
  * falls back to FFmpeg.wasm for MOV/QuickTime or codecs unsupported by AudioContext.
